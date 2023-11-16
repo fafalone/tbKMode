@@ -1,0 +1,158 @@
+Module modDisk
+
+    Public Enum MEDIA_TYPE
+        Unknown = 0 ' Format is unknown
+        F5_1Pt2_512 = 1 ' 5.25", 1.2MB,  512 bytes/sector
+        F3_1Pt44_512 = 2 ' 3.5",  1.44MB, 512 bytes/sector
+        F3_2Pt88_512 = 3 ' 3.5",  2.88MB, 512 bytes/sector
+        F3_20Pt8_512 = 4 ' 3.5",  20.8MB, 512 bytes/sector
+        F3_720_512 = 5 ' 3.5",  720KB,  512 bytes/sector
+        F5_360_512 = 6 ' 5.25", 360KB,  512 bytes/sector
+        F5_320_512 = 7 ' 5.25", 320KB,  512 bytes/sector
+        F5_320_1024 = 8 ' 5.25", 320KB,  1024 bytes/sector
+        F5_180_512 = 9 ' 5.25", 180KB,  512 bytes/sector
+        F5_160_512 = 10 ' 5.25", 160KB,  512 bytes/sector
+        RemovableMedia = 11 ' Removable media other than floppy
+        FixedMedia = 12 ' Fixed hard disk media
+        F3_120M_512 = 13 ' 3.5", 120M Floppy
+        F3_640_512 = 14 ' 3.5" ,  640KB,  512 bytes/sector
+        F5_640_512 = 15 ' 5.25",  640KB,  512 bytes/sector
+        F5_720_512 = 16 ' 5.25",  720KB,  512 bytes/sector
+        F3_1Pt2_512 = 17 ' 3.5" ,  1.2Mb,  512 bytes/sector
+        F3_1Pt23_1024 = 18 ' 3.5" ,  1.23Mb, 1024 bytes/sector
+        F5_1Pt23_1024 = 19 ' 5.25",  1.23MB, 1024 bytes/sector
+        F3_128Mb_512 = 20 ' 3.5" MO 128Mb   512 bytes/sector
+        F3_230Mb_512 = 21 ' 3.5" MO 230Mb   512 bytes/sector
+        F8_256_128 = 22 ' 8",     256KB,  128 bytes/sector
+        F3_200Mb_512 = 23 ' 3.5",   200M Floppy (HiFD)
+        F3_240M_512 = 24 ' 3.5",   240Mb Floppy (HiFD)
+        F3_32M_512 = 25 ' 3.5",   32Mb Floppy
+    End Enum
+
+    Public Type DISK_INFO
+        DiskSize As Long
+        RootDirEntries As Long
+        SectorsPerCluster As Long
+        DriveLetter As UNICODE_STRING
+    End Type
+    
+    Public Const DOS_DEVNAME_LENGTH As Long = (24 + 2 * 10) '(sizeof(DOS_DEVICE_NAME)+sizeof(WCHAR)*10)
+    Public Const DRIVE_LETTER_LENGTH As Long = 2 * 10 '(sizeof(WCHAR)*10)
+
+    Public Const DRIVE_LETTER_BUFFER_SIZE = 10&
+    Public Const DOS_DEVNAME_BUFFER_SIZE As Long = ((24) / 2) + 10 '(sizeof(DOS_DEVICE_NAME) / 2) + 10
+
+    Public RAMDISK_DRIVER_EXTENSION_KEY As LongPtr
+    Public Const RAMDISK_MEDIA_TYPE = &HF8
+    Public Const DIR_ENTRIES_PER_SECTOR = 16
+
+    Public Const FLAG_LINK_CREATED = &H1
+
+    Public REMLOCK_TAG As String
+    Public Const REMLOCK_MAXIMUM = 1
+    Public Const REMLOCK_HIGHWATER = 10
+
+    Public Const DEFAULT_DISK_SIZE = (1024 * 1024) '1MB
+    Public Const DEFAULT_ROOT_DIR_ENTRIES = 512
+    Public Const DEFAULT_SECTORS_PER_CLUSTER = 2
+    Public DEFAULT_DRIVE_LETTER As String = "Z:"
+    
+
+    Public Type DISK_GEOMETRY
+        Cylinders As LongLong 'LARGE_INTEGER
+        MediaType As MEDIA_TYPE
+        TracksPerCylinder As Long
+        SectorsPerTrack As Long
+        BytesPerSector As Long
+    End Type
+
+
+    Public Type DEVICE_EXTENSION
+        DeviceObject As LongPtr
+        LowerDeviceObject As LongPtr
+        PhysicalDeviceObject As LongPtr
+        DevState As DEVICE_STATE
+        RemoveLock As IO_REMOVE_LOCK
+        Flags As Long
+        DiskImage As LongPtr
+        DiskGeometry As DISK_GEOMETRY
+        DiskRegInfo As DISK_INFO
+        SymbolicLink As UNICODE_STRING
+        DriverLetterBuffer(0 To (DRIVE_LETTER_BUFFER_SIZE - 1)) As Integer
+        DosDeviceNameBuffer(0 To (DOS_DEVNAME_BUFFER_SIZE - 1)) As Integer
+    End Type
+
+    Public Type RAMDISK_DRIVER_EXTENSION
+        RegistryPath As UNICODE_STRING
+        DeviceInitialized As Long
+    End Type
+
+    Public Type MOUNTDEV_NAME
+        NameLength As Integer
+        Name(7) As Integer 'Normally variable length; but we cannot use variable-length arrays in APIs (not just kernel mode)
+                           'until (wink wink) twinBASIC allows non-SAFEARRAY variable-length arrays. For this project, we only
+                           'use this structure to return the name, which never changes, "RAMDisk", so we can fix it at 14 bytes.
+    End Type
+
+    [ PackingAlignment (1) ]
+    Public Type BOOT_SECTOR
+        bsJump(2) As Byte
+        bsOemName(7) As Byte
+        bsBytesPerSec As Integer
+        bsSecPerClus As Byte
+        bsResSectors As Integer
+        bsFATs As Byte
+        bsRootDirEnts As Integer
+        bsSectors As Integer
+        bsMedia As Byte
+        bsFATsecs As Integer
+        bsSecPerTrack As Integer
+        bsHeads As Integer
+        bsHiddenSecs As Long
+        bsHugeSectors As Long
+        bsDriveNumber As Byte
+        bsReserved1 As Byte
+        bsBootSignature As Byte
+        bsVolumeID As Long
+        bsLabel(10) As Byte
+        bsFileSystemType(7) As Byte
+        bsReserved(447) As Byte
+        bsSig2(1) As Byte
+    End Type 'Expected cb=512
+
+    [ PackingAlignment (1) ]
+    Public Type DIR_ENTRY
+        deName(7) As Byte
+        deExtension(2) As Byte
+        deAttributes As Byte
+        deReserved As Byte
+        deTime As Integer
+        deDate As Integer
+        deStartCluster As Integer
+        deFileSize As Long
+    End Type
+
+
+    Public Type PARTITION_INFORMATION
+        StartingOffset As LARGE_INTEGER
+        PartitionLength As LARGE_INTEGER
+        HiddenSectors As Long
+        PartitionNumber As Long
+        PartitionType As Byte
+        BootIndicator As Byte
+        RecognizedPartition As Byte
+        RewritePartition As Byte
+    End Type
+
+    Public Enum DEVICE_STATE
+        STOPPED  ' Dvice stopped
+        WORKING  ' Started and working
+        PENDINGSTOP ' Stop pending
+        PENDINGREMOVE ' Remove pending
+        SURPRISEREMOVED ' Surprise removed
+        REMOVED   ' Removed
+        MAX_STATE ' Unknown state -Some error
+    End Enum
+    
+
+End Module

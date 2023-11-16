@@ -1,0 +1,3034 @@
+'Update 16 Nov 2023; MOST RECENT.
+Module modWDM
+'Windows Driver Model Definitions for twinBASIC
+'Ported by Jon Johnson (fafalone)
+
+'Includes structs, enums, macros, and APIs from wdm.h, mountmgr.h, and other kernel mode driver headers
+'This is *not* intended to be complete right off (wdm.h alone is nearly 50,000 lines!), rather expanded 
+'by each project using it then used as a start for the next. If you substantially expand this module, 
+'please submit an update!
+'
+'IMPORTANT: All drivers must call InitIOCTLs in DriverEntry *before all other code* if using IOCTLs in it.
+
+Public SOURCE_FILE As String
+
+Public Const MAX_PATH                  As Long = 260
+
+Public Type LARGE_INTEGER
+    QuadPart As LongLong
+End Type
+Public Type ULARGE_INTEGER
+    QuadPart As LongLong
+End Type
+
+Public Type UUID
+    Data1 As Long
+    Data2 As Integer
+    Data3 As Integer
+    Data4(0 To 7) As Byte
+End Type
+
+Public Type FILETIME
+    dwLowDateTime As Long
+    dwHighDateTime As Long
+End Type
+
+'For ExRaiseHardError messageboxes
+Public Enum MessageBoxFlags
+    MB_OK = &H00000000
+    MB_OKCANCEL = &H00000001
+    MB_ABORTRETRYIGNORE = &H00000002
+    MB_YESNOCANCEL = &H00000003
+    MB_YESNO = &H00000004
+    MB_RETRYCANCEL = &H00000005
+    MB_CANCELTRYCONTINUE = &H00000006
+    MB_ICONHAND = &H00000010
+    MB_ICONQUESTION = &H00000020
+    MB_ICONEXCLAMATION = &H00000030
+    MB_ICONASTERISK = &H00000040
+    MB_USERICON = &H00000080
+    MB_ICONWARNING = MB_ICONEXCLAMATION
+    MB_ICONERROR = MB_ICONHAND
+    MB_ICONINFORMATION = MB_ICONASTERISK
+    MB_ICONSTOP = MB_ICONHAND
+    MB_DEFBUTTON1 = &H00000000
+    MB_DEFBUTTON2 = &H00000100
+    MB_DEFBUTTON3 = &H00000200
+    MB_DEFBUTTON4 = &H00000300
+    MB_APPLMODAL = &H00000000
+    MB_SYSTEMMODAL = &H00001000
+    MB_TASKMODAL = &H00002000
+    MB_HELP = &H00004000  ' Help Button
+    /*  = WINVER >= &H0400 */
+    MB_NOFOCUS = &H00008000&
+    MB_SETFOREGROUND = &H00010000
+    MB_DEFAULT_DESKTOP_ONLY = &H00020000
+    MB_TOPMOST = &H00040000
+    MB_RIGHT = &H00080000
+    MB_RTLREADING = &H00100000
+    /*  = WINVER >= &H0400 */
+    MB_SERVICE_NOTIFICATION = &H00200000
+    MB_SERVICE_NOTIFICATION_NT3X = &H00040000
+
+    MB_TYPEMASK = &H0000000F
+    MB_ICONMASK = &H000000F0
+    MB_DEFMASK = &H00000F00
+    MB_MODEMASK = &H00003000
+    MB_MISCMASK = &H0000C000&
+End Enum
+
+
+
+Public Type SID_IDENTIFIER_AUTHORITY
+    Value(0 To 5) As Byte
+End Type
+[ Description ("NOTE: You may need to use this as a header for a custom structure with fewer subauthorities appended.") ]
+Public Type SID
+    Revision As Byte
+    SubAuthorityCount As Byte
+    IdentifierAuthority As SID_IDENTIFIER_AUTHORITY
+    SubAuthority(SID_MAX_SUB_AUTHORITIES) As Long
+End Type
+Public Const SID_REVISION  = (1)  ' Current revision level
+Public Const SID_MAX_SUB_AUTHORITIES  = (15)
+Public Const SID_RECOMMENDED_SUB_AUTHORITIES  = (1)
+Public Const SECURITY_MAX_SID_SIZE = (60) '(sizeof(SID) - sizeof(DWORD) + (SID_MAX_SUB_AUTHORITIES * sizeof(DWORD)))
+
+Public Enum BOOL
+    CFALSE
+    CTRUE
+End Enum
+
+Public Type UNICODE_STRING
+    Length As Integer
+    MaximumLength As Integer
+    lpBuffer As LongPtr
+End Type
+
+Public Enum StandardAccessTypes
+    DELETE = (&H00010000)
+    READ_CONTROL = (&H00020000)
+    WRITE_DAC = (&H00040000)
+    WRITE_OWNER = (&H00080000)
+    SYNCHRONIZE = (&H00100000)
+
+    STANDARD_RIGHTS_REQUIRED = (&H000F0000)
+
+    STANDARD_RIGHTS_READ = (READ_CONTROL)
+    STANDARD_RIGHTS_WRITE = (READ_CONTROL)
+    STANDARD_RIGHTS_EXECUTE = (READ_CONTROL)
+
+    STANDARD_RIGHTS_ALL = (&H001F0000)
+
+    SPECIFIC_RIGHTS_ALL = (&H0000FFFF&)
+
+' //
+' // AccessSystemAcl access type
+' //
+
+    ACCESS_SYSTEM_SECURITY = (&H01000000)
+    MAXIMUM_ALLOWED = (&H02000000)
+End Enum
+Public Enum GenericRights
+    GENERIC_READ = (&H80000000)
+    GENERIC_WRITE = (&H40000000)
+    GENERIC_EXECUTE = (&H20000000)
+    GENERIC_ALL = (&H10000000)
+End Enum
+Public Enum FileAccessRights
+    FILE_READ_DATA = (&H0001)  ' file & pipe
+    FILE_LIST_DIRECTORY = (&H0001)  ' directory
+    FILE_WRITE_DATA = (&H0002)  ' file & pipe
+    FILE_ADD_FILE = (&H0002)  ' directory
+    FILE_APPEND_DATA = (&H0004)  ' file
+    FILE_ADD_SUBDIRECTORY = (&H0004)  ' directory
+    FILE_CREATE_PIPE_INSTANCE = (&H0004)  ' named pipe
+    FILE_READ_EA = (&H0008)  ' file & directory
+    FILE_WRITE_EA = (&H0010)  ' file & directory
+    FILE_EXECUTE = (&H0020)  ' file
+    FILE_TRAVERSE = (&H0020)  ' directory
+    FILE_DELETE_CHILD = (&H0040)  ' directory
+    FILE_READ_ATTRIBUTES = (&H0080)  ' all
+    FILE_WRITE_ATTRIBUTES = (&H0100)  ' all
+    FILE_ALL_ACCESS = (STANDARD_RIGHTS_REQUIRED Or SYNCHRONIZE Or &H1FF)
+    FILE_GENERIC_READ = (STANDARD_RIGHTS_READ Or FILE_READ_DATA Or FILE_READ_ATTRIBUTES Or FILE_READ_EA Or SYNCHRONIZE)
+    FILE_GENERIC_WRITE = (STANDARD_RIGHTS_WRITE Or FILE_WRITE_DATA Or FILE_WRITE_ATTRIBUTES Or FILE_WRITE_EA Or FILE_APPEND_DATA Or SYNCHRONIZE)
+    FILE_GENERIC_EXECUTE = (STANDARD_RIGHTS_EXECUTE Or FILE_READ_ATTRIBUTES Or FILE_EXECUTE Or SYNCHRONIZE)
+End Enum
+Public Enum FILE_ATTRIBUTES
+    INVALID_FILE_ATTRIBUTES = -1
+    FILE_ATTRIBUTE_READONLY = &H00000001
+    FILE_ATTRIBUTE_HIDDEN = &H00000002
+    FILE_ATTRIBUTE_SYSTEM = &H00000004
+    FILE_ATTRIBUTE_DIRECTORY = &H00000010 'Read only
+    FILE_ATTRIBUTE_ARCHIVE = &H00000020
+    FILE_ATTRIBUTE_DEVICE = &H00000040
+    FILE_ATTRIBUTE_NORMAL = &H00000080
+    FILE_ATTRIBUTE_TEMPORARY = &H00000100
+    FILE_ATTRIBUTE_SPARSE_FILE = &H00000200 'Read only
+    FILE_ATTRIBUTE_REPARSE_POINT = &H00000400 'Read only
+    FILE_ATTRIBUTE_COMPRESSED = &H00000800
+    FILE_ATTRIBUTE_OFFLINE = &H00001000
+    FILE_ATTRIBUTE_NOT_CONTENT_INDEXED = &H00002000
+    FILE_ATTRIBUTE_ENCRYPTED = &H00004000
+    FILE_ATTRIBUTE_INTEGRITY_STREAM = &H00008000&
+    FILE_ATTRIBUTE_VIRTUAL = &H00010000
+    FILE_ATTRIBUTE_NO_SCRUB_DATA = &H00020000
+    FILE_ATTRIBUTE_EA = &H00040000
+    FILE_ATTRIBUTE_RECALL_ON_OPEN = &H00040000
+    FILE_ATTRIBUTE_PINNED = &H000080000
+    FILE_ATTRIBUTE_UNPINNED = &H00100000
+    FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = &H400000
+    FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL = &H20000000
+End Enum
+Public Enum FileShareMode
+    FILE_SHARE_READ = &H00000001
+    FILE_SHARE_WRITE = &H00000002
+    FILE_SHARE_DELETE = &H00000004
+End Enum
+Public Enum FileCreateDisposition
+    FILE_SUPERSEDE = &H00000000
+    FILE_OPEN = &H00000001
+    FILE_CREATE = &H00000002
+    FILE_OPEN_IF = &H00000003
+    FILE_OVERWRITE = &H00000004
+    FILE_OVERWRITE_IF = &H00000005
+    FILE_MAXIMUM_DISPOSITION = &H00000005
+End Enum
+Public Enum FileCreateOutcome
+    FILE_SUPERSEDED = &H00000000
+    FILE_OPENED = &H00000001
+    FILE_CREATED = &H00000002
+    FILE_OVERWRITTEN = &H00000003
+    FILE_EXISTS = &H00000004
+    FILE_DOES_NOT_EXIST = &H00000005
+End Enum
+Public Enum FileAccessFlags
+    FILE_DIRECTORY_FILE = &H00000001
+    FILE_WRITE_THROUGH = &H00000002
+    FILE_SEQUENTIAL_ONLY = &H00000004
+    FILE_NO_INTERMEDIATE_BUFFERING = &H00000008
+    FILE_SYNCHRONOUS_IO_ALERT = &H00000010
+    FILE_SYNCHRONOUS_IO_NONALERT = &H00000020
+    FILE_NON_DIRECTORY_FILE = &H00000040
+    FILE_CREATE_TREE_CONNECTION = &H00000080
+    FILE_COMPLETE_IF_OPLOCKED = &H00000100
+    FILE_NO_EA_KNOWLEDGE = &H00000200
+    FILE_OPEN_REMOTE_INSTANCE = &H00000400
+    FILE_RANDOM_ACCESS = &H00000800
+    FILE_DELETE_ON_CLOSE = &H00001000
+    FILE_OPEN_BY_FILE_ID = &H00002000
+    FILE_OPEN_FOR_BACKUP_INTENT = &H00004000
+    FILE_NO_COMPRESSION = &H00008000&
+' #if (_WIN32_WINNT >= _WIN32_WINNT_WIN7)
+    FILE_OPEN_REQUIRING_OPLOCK = &H00010000
+' #endif
+    FILE_RESERVE_OPFILTER = &H00100000
+    FILE_OPEN_REPARSE_POINT = &H00200000
+    FILE_OPEN_NO_RECALL = &H00400000
+    FILE_OPEN_FOR_FREE_SPACE_QUERY = &H00800000
+    FILE_VALID_OPTION_FLAGS = &H00ffffff
+    FILE_VALID_PIPE_OPTION_FLAGS = &H00000032
+    FILE_VALID_MAILSLOT_OPTION_FLAGS = &H00000032
+    FILE_VALID_SET_FLAGS = &H00000036
+End Enum
+
+Public Enum DEVICE_TYPE
+    FILE_DEVICE_8042_PORT = &H00000027
+    FILE_DEVICE_ACPI = &H00000032
+    FILE_DEVICE_BATTERY = &H00000029
+    FILE_DEVICE_BEEP = &H00000001
+    FILE_DEVICE_BUS_EXTENDER = &H0000002a
+    FILE_DEVICE_CD_ROM = &H00000002
+    FILE_DEVICE_CD_ROM_FILE_SYSTEM = &H00000003
+    FILE_DEVICE_CHANGER = &H00000030
+    FILE_DEVICE_CONTROLLER = &H00000004
+    FILE_DEVICE_DATALINK = &H00000005
+    FILE_DEVICE_DFS = &H00000006
+    FILE_DEVICE_DFS_FILE_SYSTEM = &H00000035
+    FILE_DEVICE_DFS_VOLUME = &H00000036
+    FILE_DEVICE_DISK = &H00000007
+    FILE_DEVICE_DISK_FILE_SYSTEM = &H00000008
+    FILE_DEVICE_DVD = &H00000033
+    FILE_DEVICE_FILE_SYSTEM = &H00000009
+    FILE_DEVICE_FIPS = &H0000003a
+    FILE_DEVICE_FULLSCREEN_VIDEO = &H00000034
+    FILE_DEVICE_INPORT_PORT = &H0000000a
+    FILE_DEVICE_KEYBOARD = &H0000000b
+    FILE_DEVICE_KS = &H0000002f
+    FILE_DEVICE_KSEC = &H00000039
+    FILE_DEVICE_MAILSLOT = &H0000000c
+    FILE_DEVICE_MASS_STORAGE = &H0000002d
+    FILE_DEVICE_MIDI_IN = &H0000000d
+    FILE_DEVICE_MIDI_OUT = &H0000000e
+    FILE_DEVICE_MODEM = &H0000002b
+    FILE_DEVICE_MOUSE = &H0000000f
+    FILE_DEVICE_MULTI_UNC_PROVIDER = &H00000010
+    FILE_DEVICE_NAMED_PIPE = &H00000011
+    FILE_DEVICE_NETWORK = &H00000012
+    FILE_DEVICE_NETWORK_BROWSER = &H00000013
+    FILE_DEVICE_NETWORK_FILE_SYSTEM = &H00000014
+    FILE_DEVICE_NETWORK_REDIRECTOR = &H00000028
+    FILE_DEVICE_NULL = &H00000015
+    FILE_DEVICE_PARALLEL_PORT = &H00000016
+    FILE_DEVICE_PHYSICAL_NETCARD = &H00000017
+    FILE_DEVICE_PRINTER = &H00000018
+    FILE_DEVICE_SCANNER = &H00000019
+    FILE_DEVICE_SCREEN = &H0000001c
+    FILE_DEVICE_SERENUM = &H00000037
+    FILE_DEVICE_SERIAL_MOUSE_PORT = &H0000001a
+    FILE_DEVICE_SERIAL_PORT = &H0000001b
+    FILE_DEVICE_SMARTCARD = &H00000031
+    FILE_DEVICE_SMB = &H0000002e
+    FILE_DEVICE_SOUND = &H0000001d
+    FILE_DEVICE_STREAMS = &H0000001e
+    FILE_DEVICE_TAPE = &H0000001f
+    FILE_DEVICE_TAPE_FILE_SYSTEM = &H00000020
+    FILE_DEVICE_TERMSRV = &H00000038
+    FILE_DEVICE_TRANSPORT = &H00000021
+    FILE_DEVICE_UNKNOWN = &H00000022
+    FILE_DEVICE_VDM = &H0000002c
+    FILE_DEVICE_VIDEO = &H00000023
+    FILE_DEVICE_VIRTUAL_DISK = &H00000024
+    FILE_DEVICE_WAVE_IN = &H00000025
+    FILE_DEVICE_WAVE_OUT = &H00000026
+    FILE_DEVICE_INFINIBAND = &H0000003B
+    FILE_DEVICE_VMBUS = &H0000003E
+    FILE_DEVICE_CRYPT_PROVIDER = &H0000003F
+    FILE_DEVICE_WPD = &H00000040
+    FILE_DEVICE_BLUETOOTH = &H00000041
+    FILE_DEVICE_MT_COMPOSITE = &H00000042
+    FILE_DEVICE_MT_TRANSPORT = &H00000043
+    FILE_DEVICE_BIOMETRIC = &H00000044
+    FILE_DEVICE_PMI = &H00000045
+    FILE_DEVICE_EHSTOR = &H00000046
+    FILE_DEVICE_DEVAPI = &H00000047
+    FILE_DEVICE_GPIO = &H00000048
+    FILE_DEVICE_USBEX = &H00000049
+    FILE_DEVICE_CONSOLE = &H00000050
+    FILE_DEVICE_NFP = &H00000051
+    FILE_DEVICE_SYSENV = &H00000052
+    FILE_DEVICE_VIRTUAL_BLOCK = &H00000053
+    FILE_DEVICE_POINT_OF_SERVICE = &H00000054
+    FILE_DEVICE_STORAGE_REPLICATION = &H00000055
+    FILE_DEVICE_TRUST_ENV = &H00000056
+    FILE_DEVICE_UCM = &H00000057
+    FILE_DEVICE_UCMTCPCI = &H00000058
+    FILE_DEVICE_PERSISTENT_MEMORY = &H00000059
+    FILE_DEVICE_NVDIMM = &H0000005a
+    FILE_DEVICE_HOLOGRAPHIC = &H0000005b
+    FILE_DEVICE_SDFXHCI = &H0000005c
+    FILE_DEVICE_UCMUCSI = &H0000005d
+    FILE_DEVICE_PRM = &H0000005e
+    FILE_DEVICE_EVENT_COLLECTOR = &H0000005f
+    FILE_DEVICE_USB4 = &H00000060
+    FILE_DEVICE_SOUNDWIRE = &H00000061
+End Enum
+
+Public Enum GROUP_SID_ATTRIBUTES
+    SE_GROUP_MANDATORY = (&H00000001)
+    SE_GROUP_ENABLED_BY_DEFAULT = (&H00000002)
+    SE_GROUP_ENABLED = (&H00000004)
+    SE_GROUP_OWNER = (&H00000008)
+    SE_GROUP_USE_FOR_DENY_ONLY = (&H00000010)
+    SE_GROUP_INTEGRITY = (&H00000020)
+    SE_GROUP_INTEGRITY_ENABLED = (&H00000040)
+    SE_GROUP_LOGON_ID = (&HC0000000)
+    SE_GROUP_RESOURCE = (&H20000000)
+    SE_GROUP_VALID_ATTRIBUTES = (SE_GROUP_MANDATORY Or SE_GROUP_ENABLED_BY_DEFAULT Or SE_GROUP_ENABLED Or SE_GROUP_OWNER Or SE_GROUP_USE_FOR_DENY_ONLY Or SE_GROUP_LOGON_ID Or SE_GROUP_RESOURCE Or SE_GROUP_INTEGRITY Or SE_GROUP_INTEGRITY_ENABLED)
+End Enum
+
+Public Enum SID_NAME_USE
+    SidTypeUser = 1
+    SidTypeGroup = 2
+    SidTypeDomain = 3
+    SidTypeAlias = 4
+    SidTypeWellKnownGroup = 5
+    SidTypeDeletedAccount = 6
+    SidTypeInvalid = 7
+    SidTypeUnknown = 8
+    SidTypeComputer = 9
+    SidTypeLabel = 10
+    SidTypeLogonSession = 11
+End Enum
+Public Type SID_AND_ATTRIBUTES
+    Sid As LongPtr
+    Attributes As GROUP_SID_ATTRIBUTES
+End Type
+Public Const SID_HASH_SIZE = 32
+
+Public Type SID_AND_ATTRIBUTES_HASH
+    SidCount As Long
+    SidAttr As LongPtr
+    Hash(0 To (SID_HASH_SIZE - 1)) As LongPtr
+End Type
+
+Public Type LUID
+    lowPart As Long
+    highPart As Long
+End Type
+
+Public Enum SE_PRIVILEGE_ATTR
+    SE_PRIVILEGE_ENABLED_BY_DEFAULT = (&H00000001)
+    SE_PRIVILEGE_ENABLED = (&H00000002)
+    SE_PRIVILEGE_REMOVED = (&H00000004)
+    SE_PRIVILEGE_USED_FOR_ACCESS = (&H80000000)
+End Enum
+
+Public Type LUID_AND_ATTRIBUTES
+    pLuid       As LUID
+    Attributes  As SE_PRIVILEGE_ATTR
+End Type
+
+Public Type TOKEN_PRIVILEGES
+    PrivilegeCount      As Long
+    Privileges(0 To 1)  As LUID_AND_ATTRIBUTES
+End Type
+
+Public Enum TOKEN_TYPE
+    TokenPrimary = 1
+    TokenImpersonation
+End Enum
+
+Public Enum SECURITY_IMPERSONATION_LEVEL
+    SecurityAnonymous = 0
+    SecurityIdentification = 1
+    SecurityImpersonation = 2
+    SecurityDelegation = 3
+End Enum
+
+
+Public Const IOCTL_DISK_BASE = FILE_DEVICE_DISK
+Public IOCTL_DISK_GET_PARTITION_INFO As Long
+Public IOCTL_DISK_GET_MEDIA_TYPES As Long
+Public IOCTL_DISK_GET_DRIVE_GEOMETRY As Long
+Public IOCTL_DISK_CHECK_VERIFY As Long
+Public IOCTL_DISK_IS_WRITABLE As Long
+Public IOCTL_DISK_SET_PARTITION_INFO As Long
+Public IOCTL_DISK_FORMAT_TRACKS As Long
+Public Const MOUNTMGRCONTROLTYPE = &H0000006
+Public Const MOUNTDEVCONTROLTYPE = &H0000004
+Public IOCTL_MOUNTMGR_QUERY_POINTS As Long
+Public IOCTL_MOUNTDEV_QUERY_DEVICE_NAME As Long
+
+Public Const FTTYPE As Long = &H66 'f'
+Public FT_BALANCED_READ_MODE As Long
+
+Public Enum ObjectAttributeValues
+    OBJ_INHERIT = &H00000002
+    OBJ_PERMANENT = &H00000010
+    OBJ_EXCLUSIVE = &H00000020
+    OBJ_CASE_INSENSITIVE = &H00000040
+    OBJ_OPENIF = &H00000080
+    OBJ_OPENLINK = &H00000100
+    OBJ_KERNEL_HANDLE = &H00000200
+    OBJ_FORCE_ACCESS_CHECK = &H00000400
+    OBJ_IGNORE_IMPERSONATED_DEVICEMAP = &H00000800
+    OBJ_DONT_REPARSE = &H00001000
+    OBJ_VALID_ATTRIBUTES = &H00001FF2
+End Enum
+Public Type OBJECT_ATTRIBUTES
+    Length As Long
+    RootDirectory As LongPtr
+    ObjectName As LongPtr
+    Attributes As ObjectAttributeValues
+    SecurityDescriptor As LongPtr
+    SecurityQualityOfService As LongPtr
+End Type
+
+#If Win64 Then
+Public Type _SLIST_HEADER
+    HeaderX64(15) As Byte
+End Type
+#Else
+Public Type _SLIST_HEADER
+    Alignment As LongLong
+End Type
+#End If
+
+Public Type GENERAL_LOOKASIDE_LAYOUT
+    ListHead As _SLIST_HEADER' or _SINGLE_LIST_ENTRY
+    Depth As Integer
+    MaximumDepth As Integer
+    TotalAllocates As Long
+    AllocateMissesHits As Long
+    TotalFrees As Long
+    FreeMissesHits As Long
+    Type As POOL_TYPE
+    Tag As Long
+    Size As Long
+    Allocate As LongPtr
+    Free As LongPtr
+    ListEntry As LIST_ENTRY
+    LastTotalAllocates As Long
+    LastAllocateMissesHits As Long
+    Future(1) As Long
+End Type
+
+Public Type _GENERAL_LOOKASIDE
+    L As GENERAL_LOOKASIDE_LAYOUT
+    #If Win64 Then
+    align(31) As Byte 'LOOKASIDE_ALIGN
+    #Else
+    align(55) As Byte
+    #End If
+End Type
+
+
+Public Type NPAGED_LOOKASIDE_LIST
+    L As _GENERAL_LOOKASIDE
+    #If Win64 = 0 Then
+    Lock__ObsoleteButDoNotDelete As Long
+    align(59) As Byte
+    #End If
+End Type
+
+
+Public Type LIST_ENTRY
+    Flink               As LongPtr
+    Blink               As LongPtr
+End Type
+
+Public Type KDEVICE_QUEUE
+    Type                As Integer
+    Size                As Integer
+    DeviceListHead      As LIST_ENTRY
+    Lock                As LongPtr
+    Busy                As Long
+End Type
+
+Public Type KDPC
+    Type                As Byte
+    Importance          As Byte
+    Number              As Integer
+    DpcListEntry        As LongPtr
+    ProcessorHistory    As LongPtr
+    DeferredRoutine     As LongPtr
+    DeferredContext     As LongPtr
+    SystemArgument1     As LongPtr
+    SystemArgument2     As LongPtr
+    DpcData             As LongPtr
+End Type
+
+Public Type DISPATCHER_HEADER
+    Lock                As Long
+    SignalState         As Long
+    WaitListHead        As LIST_ENTRY
+End Type
+
+Public Enum EVENT_TYPE
+    NotificationEvent
+    SynchronizationEvent
+End Enum
+
+Public Type KEVENT
+    Header As DISPATCHER_HEADER
+End Type
+
+Public Enum KWAIT_REASON
+    Executive = 0
+    FreePage = 1
+    PageIn = 2
+    PoolAllocation = 3
+    DelayExecution = 4
+    Suspended = 5
+    UserRequest = 6
+    WrExecutive = 7
+    WrFreePage = 8
+    WrPageIn = 9
+    WrPoolAllocation = 10
+    WrDelayExecution = 11
+    WrSuspended = 12
+    WrUserRequest = 13
+    WrSpare0 = 14
+    WrQueue = 15
+    WrLpcReceive = 16
+    WrLpcReply = 17
+    WrVirtualMemory = 18
+    WrPageOut = 19
+    WrRendezvous = 20
+    WrKeyedEvent = 21
+    WrTerminated = 22
+    WrProcessInSwap = 23
+    WrCpuRateControl = 24
+    WrCalloutStack = 25
+    WrKernel = 26
+    WrResource = 27
+    WrPushLock = 28
+    WrMutex = 29
+    WrQuantumEnd = 30
+    WrDispatchInt = 31
+    WrPreempted = 32
+    WrYieldExecution = 33
+    WrFastMutex = 34
+    WrGuardedMutex = 35
+    WrRundown = 36
+    WrAlertByThreadId = 37
+    WrDeferredPreempt = 38
+    WrPhysicalFault = 39
+    WrIoRing = 40
+    WrMdlCache = 41
+    MaximumWaitReason = 42
+End Enum
+
+
+
+Public Type IO_STATUS_BLOCK
+    StatusPointer As LongPtr
+    Information As LongPtr
+End Type
+
+Public Type IO_REMOVE_LOCK_COMMON_BLOCK
+    Removed As Byte
+    Reserved (2) As Byte
+    IoCount As Long
+    RemoveEvent As KEVENT
+End Type
+
+Public Type IO_REMOVE_LOCK
+    Common As IO_REMOVE_LOCK_COMMON_BLOCK
+End Type
+
+Public Enum DO_Flags
+    DO_VERIFY_VOLUME = &H00000002
+    DO_BUFFERED_IO = &H00000004
+    DO_EXCLUSIVE = &H00000008
+    DO_DIRECT_IO = &H00000010
+    DO_MAP_IO_BUFFER = &H00000020
+    DO_DEVICE_HAS_NAME = &H00000040
+    DO_DEVICE_INITIALIZING = &H00000080
+    DO_SYSTEM_BOOT_PARTITION = &H00000100
+    DO_LONG_TERM_REQUESTS = &H00000200
+    DO_NEVER_LAST_DEVICE = &H00000400
+    DO_SHUTDOWN_REGISTERED = &H00000800
+    DO_BUS_ENUMERATED_DEVICE = &H00001000
+    DO_POWER_PAGABLE = &H00002000
+    DO_POWER_INRUSH = &H00004000
+    DO_LOW_PRIORITY_FILESYSTEM = &H00010000
+    DO_SUPPORTS_TRANSACTIONS = &H00040000
+    DO_FORCE_NEITHER_IO = &H00080000
+    DO_VOLUME_DEVICE_OBJECT = &H00100000
+    DO_SYSTEM_SYSTEM_PARTITION = &H00200000
+    DO_SYSTEM_CRITICAL_PARTITION = &H00400000
+    DO_DISALLOW_EXECUTE = &H00800000
+    DO_DEVICE_TO_BE_RESET = &H04000000
+    DO_DEVICE_IRP_REQUIRES_EXTENSION = &H08000000
+    DO_DAX_VOLUME = &H10000000
+    DO_BOOT_CRITICAL = &H20000000
+    DRVO_REINIT_REGISTERED = &H00000008
+    DRVO_INITIALIZED = &H00000010
+    DRVO_BOOTREINIT_REGISTERED = &H00000020
+    DRVO_LEGACY_RESOURCES = &H00000040
+End Enum
+
+Public Enum IrpFlags
+    IRP_NOCACHE = &H1
+    IRP_PAGING_IO = &H2
+    IRP_MOUNT_COMPLETION = &H2
+    IRP_SYNCHRONOUS_API = &H4
+    IRP_ASSOCIATED_IRP = &H8
+    IRP_BUFFERED_IO = &H10
+    IRP_DEALLOCATE_BUFFER = &H20
+    IRP_INPUT_OPERATION = &H40
+    IRP_SYNCHRONOUS_PAGING_IO = &H40
+    IRP_CREATE_OPERATION = &H80
+    IRP_READ_OPERATION = &H100
+    IRP_WRITE_OPERATION = &H200
+    IRP_CLOSE_OPERATION = &H400
+    IRP_DEFER_IO_COMPLETION = &H800
+    IRP_OB_QUERY_NAME = &H1000
+    IRP_HOLD_DEVICE_QUEUE = &H2000
+'  Define I/O request packet (IRP) alternate flags for allocation control.
+    IRP_QUOTA_CHARGED = &H1
+    IRP_ALLOCATED_MUST_SUCCEED = &H2
+    IRP_ALLOCATED_FIXED_SIZE = &H4
+    IRP_LOOKASIDE_ALLOCATION = &H8
+End Enum
+Public Type IRP
+    Type                As Integer
+    Size                As Integer  '2
+    MdlAddress          As LongPtr  '8
+    Flags               As IrpFlags     '16
+    [ Description ("This is the AssociatedIrp union. SystemBuffer makes it more clear for our purposes. Could also be (LONG)IrpCount or (PIRP)MasterIrp") ]
+    SystemBuffer        As LongPtr  '24   
+    ThreadListEntry     As LIST_ENTRY '32
+    IoStatus            As IO_STATUS_BLOCK '48
+    RequestorMode       As Byte      '64
+    PendingReturned     As Byte
+    StackCount          As Byte
+    CurrentLocation     As Byte
+    Cancel              As Byte
+    CancelIrql          As Byte
+    ApcEnvironment      As Byte
+    AllocationFlags     As Byte
+    UserIosb            As LongPtr   '72
+    UserEvent           As LongPtr   '80
+    #If Win64 Then
+    Overlay(15)         As Byte  '88
+    #Else
+    Overlay(7)          As Byte
+    #End If
+    CancelRoutine       As LongPtr   '104
+    UserBuffer          As LongPtr   '112
+    'Tail
+    DriverContext(3)    As LongPtr   '120
+    Thread              As LongPtr   '152
+    AuxiliaryBuffer     As LongPtr   '160
+    ListEntry           As LIST_ENTRY '168
+    CurrentStackLocation As LongPtr  '184
+    OriginalFileObject  As LongPtr    '192
+    Pad                 As LongLong 'Tail union alternate _KAPC is 8 bytes larger on both x86 and x64
+End Type 'Expected size (x64=0xD0) (x86=0x70)
+
+'One must be *incredibly* careful about alignments. Because while unexpected issues are rare with 32bit,
+'64bit will encounter a lot more issues. For instance with the below, tB inserts 4 bytes behind the 
+'scenes so in IO_STACK_LOCATION, the first member of the union struct we're using is at 0x8; not 0x4.
+'Always confirm final sizes (LenB *ONLY*! Len does not include align pads) with the following:
+'https://www.vergiliusproject.com/kernels
+
+Public Type DEVICEIOCTL       'Comments: x64 alignments
+    OutputBufferLength  As Long  '0x8
+    #If Win64 Then
+    zPtrAlign2 As Long
+    #End If
+    InputBufferLength   As Long   '0x10
+    #If Win64 Then
+    zPtrAlign3 As Long
+    #End If
+    IoControlCode       As Long   '0x18
+    Type3InputBuffer    As LongPtr '0x20
+End Type
+
+Public Const SL_PENDING_RETURNED  = &H01
+Public Const SL_ERROR_RETURNED  = &H02
+Public Const SL_INVOKE_ON_CANCEL  = &H20
+Public Const SL_INVOKE_ON_SUCCESS  = &H40
+Public Const SL_INVOKE_ON_ERROR  = &H80
+
+Public Enum IoStackLocFlags
+    SL_KEY_SPECIFIED = &H01
+    SL_OVERRIDE_VERIFY_VOLUME = &H02
+    SL_WRITE_THROUGH = &H04
+    SL_FT_SEQUENTIAL_WRITE = &H08
+    SL_FORCE_DIRECT_WRITE = &H10
+    SL_REALTIME_STREAM = &H20  ' valid only with optical media
+    SL_PERSISTENT_MEMORY_FIXED_MAPPING = &H20  ' valid only with persistent memory device and IRP_MJ_WRITE
+    SL_BYPASS_IO = &H40
+End Enum
+Public Type IO_STACK_LOCATION
+    MajorFunction       As Byte       '0x0
+    MinorFunction       As Byte       '0x1
+    /* [ TypeHint(IoStackLocFlags) ] */ Flags               As Byte       '0x2
+    Control             As Byte       '0x3
+    'There's a union here; the DeviceIoControl
+    'struct is what we're interested in right now.
+    'You may need multiple versions of this for other
+    'uses until there's union support.
+    DeviceIoControl     As DEVICEIOCTL '0x8
+    DeviceObject        As LongPtr    '0x28
+    FileObject          As LongPtr    '0x30
+    CompletionRoutine   As LongPtr    '0x38
+    Context             As LongPtr    '0x40
+End Type 'Expected size (x64) = 0x48
+
+Public Enum IO_TYPE
+    IO_TYPE_ADAPTER = &H00000001
+    IO_TYPE_CONTROLLER = &H00000002
+    IO_TYPE_DEVICE = &H00000003
+    IO_TYPE_DRIVER = &H00000004
+    IO_TYPE_FILE = &H00000005
+    IO_TYPE_IRP = &H00000006
+    IO_TYPE_MASTER_ADAPTER = &H00000007
+    IO_TYPE_OPEN_PACKET = &H00000008
+    IO_TYPE_TIMER = &H00000009
+    IO_TYPE_VPB = &H0000000a
+    IO_TYPE_ERROR_LOG = &H0000000b
+    IO_TYPE_ERROR_MESSAGE = &H0000000c
+    IO_TYPE_DEVICE_OBJECT_EXTENSION = &H0000000d
+    IO_TYPE_IORING = &H0000000e
+End Enum
+
+Public Enum DRIVER_OBJECT_FLAGS
+    DRVO_UNLOAD_INVOKED = &H00000001
+    DRVO_LEGACY_DRIVER = &H00000002
+    DRVO_BUILTIN_DRIVER = &H00000004  ' Driver objects for Hal, PnP Mgr
+    DRVO_REINIT_REGISTERED = &H00000008
+    DRVO_INITIALIZED = &H00000010
+    DRVO_BOOTREINIT_REGISTERED = &H00000020
+    DRVO_LEGACY_RESOURCES = &H00000040
+End Enum
+Public Type DRIVER_OBJECT
+    /* [ TypeHint(IO_TYPE) ] */ Type                As Integer
+    Size                As Integer
+    DeviceObject        As LongPtr
+    Flags               As DRIVER_OBJECT_FLAGS
+    DriverStart         As LongPtr
+    DriverSize          As Long
+    DriverSection       As LongPtr
+    DriverExtension     As LongPtr 'PDRIVER_EXTENSION
+    DriverName          As UNICODE_STRING
+    HardwareDatabase    As LongPtr
+    FastIoDispatch      As LongPtr
+    DriverInit          As LongPtr
+    DriverStartIo       As LongPtr
+    DriverUnload        As LongPtr
+    MajorFunction(IRP_MJ_MAXIMUM_FUNCTION)   As LongPtr
+End Type 'Expected size x64=0x150, x86=0xa8
+
+Public Type DRIVER_EXTENSION
+    DriverObject As LongPtr
+    AddDevice As LongPtr
+    Count As Long
+    ServiceKeyName As UNICODE_STRING
+End Type
+
+Public Enum DEVICE_OBJECT_FLAGS
+    DO_UNLOAD_PENDING = &H00000001
+    DO_VERIFY_VOLUME = &H00000002
+    DO_BUFFERED_IO = &H00000004
+    DO_EXCLUSIVE = &H00000008
+    DO_DIRECT_IO = &H00000010
+    DO_MAP_IO_BUFFER = &H00000020
+    DO_DEVICE_HAS_NAME = &H00000040
+    DO_DEVICE_INITIALIZING = &H00000080
+    DO_SYSTEM_BOOT_PARTITION = &H00000100
+    DO_LONG_TERM_REQUESTS = &H00000200
+    DO_NEVER_LAST_DEVICE = &H00000400
+    DO_SHUTDOWN_REGISTERED = &H00000800
+    DO_BUS_ENUMERATED_DEVICE = &H00001000
+    DO_POWER_PAGABLE = &H00002000
+    DO_POWER_INRUSH = &H00004000
+    DO_LOW_PRIORITY_FILESYSTEM = &H00010000
+    DO_SUPPORTS_PERSISTENT_ACLS = &H00020000
+    DO_SUPPORTS_TRANSACTIONS = &H00040000
+    DO_FORCE_NEITHER_IO = &H00080000
+    DO_VOLUME_DEVICE_OBJECT = &H00100000
+    DO_SYSTEM_SYSTEM_PARTITION = &H00200000
+    DO_SYSTEM_CRITICAL_PARTITION = &H00400000
+    DO_DISALLOW_EXECUTE = &H00800000
+    DO_DEVICE_TO_BE_RESET = &H04000000
+    DO_DEVICE_IRP_REQUIRES_EXTENSION = &H08000000
+    DO_DAX_VOLUME = &H10000000
+    DO_BOOT_CRITICAL = &H20000000
+End Enum
+Public Enum FILE_DEVICE_CHARACTERISTICS
+    FILE_REMOVABLE_MEDIA = &H00000001
+    FILE_READ_ONLY_DEVICE = &H00000002
+    FILE_FLOPPY_DISKETTE = &H00000004
+    FILE_WRITE_ONCE_MEDIA = &H00000008
+    FILE_REMOTE_DEVICE = &H00000010
+    FILE_DEVICE_IS_MOUNTED = &H00000020
+    FILE_VIRTUAL_VOLUME = &H00000040
+    FILE_AUTOGENERATED_DEVICE_NAME = &H00000080
+    FILE_DEVICE_SECURE_OPEN = &H00000100
+    FILE_CHARACTERISTIC_PNP_DEVICE = &H00000800
+    FILE_CHARACTERISTIC_TS_DEVICE = &H00001000
+    FILE_CHARACTERISTIC_WEBDAV_DEVICE = &H00002000
+    FILE_CHARACTERISTIC_CSV = &H00010000
+    FILE_DEVICE_ALLOW_APPCONTAINER_TRAVERSAL = &H00020000
+    FILE_PORTABLE_DEVICE = &H00040000
+    FILE_REMOTE_DEVICE_VSMB = &H00080000
+    FILE_DEVICE_REQUIRE_SECURITY_CHECK = &H00100000
+End Enum
+Public Type DEVICE_OBJECT
+    Type                As Integer
+    Size                As Integer
+    ReferenceCount      As Long
+    DriverObject        As LongPtr
+    NextDevice          As LongPtr
+    AttachedDevice      As LongPtr
+    CurrentIrp          As LongPtr
+    Timer               As LongPtr
+    Flags               As DEVICE_OBJECT_FLAGS
+    Characteristics     As FILE_DEVICE_CHARACTERISTICS
+    Vpb                 As LongPtr
+    DeviceExtension     As LongPtr
+    DeviceType          As Long
+    StackSize           As Byte
+    #If Win64 Then
+    Queue(71)           As Byte 'This includes alignment padding, so be careful if copying out.
+    #Else
+    Queue(39)           As Byte
+    #End If
+    AlignRequirement    As Long
+    DeviceQueue         As KDEVICE_QUEUE
+    Dpc                 As KDPC
+    ActiveThreadCount   As Long
+    SecurityDescriptor  As LongPtr
+    DeviceLock          As KEVENT
+    SectorSize          As Integer
+    Spare1              As Integer
+    DeviceObjExtension  As LongPtr
+    Reserved            As LongPtr
+End Type 'Expected size x64=0x150, x86=0xb8
+
+Public Enum FILE_OBJECT_FLAGS
+    FO_FILE_OPEN = &H00000001
+    FO_SYNCHRONOUS_IO = &H00000002
+    FO_ALERTABLE_IO = &H00000004
+    FO_NO_INTERMEDIATE_BUFFERING = &H00000008
+    FO_WRITE_THROUGH = &H00000010
+    FO_SEQUENTIAL_ONLY = &H00000020
+    FO_CACHE_SUPPORTED = &H00000040
+    FO_NAMED_PIPE = &H00000080
+    FO_STREAM_FILE = &H00000100
+    FO_MAILSLOT = &H00000200
+    FO_GENERATE_AUDIT_ON_CLOSE = &H00000400
+    FO_QUEUE_IRP_TO_THREAD = FO_GENERATE_AUDIT_ON_CLOSE
+    FO_DIRECT_DEVICE_OPEN = &H00000800
+    FO_FILE_MODIFIED = &H00001000
+    FO_FILE_SIZE_CHANGED = &H00002000
+    FO_CLEANUP_COMPLETE = &H00004000
+    FO_TEMPORARY_FILE = &H00008000&
+    FO_DELETE_ON_CLOSE = &H00010000
+    FO_OPENED_CASE_SENSITIVE = &H00020000
+    FO_HANDLE_CREATED = &H00040000
+    FO_FILE_FAST_IO_READ = &H00080000
+    FO_RANDOM_ACCESS = &H00100000
+    FO_FILE_OPEN_CANCELLED = &H00200000
+    FO_VOLUME_OPEN = &H00400000
+    FO_BYPASS_IO_ENABLED = &H00800000  'when set BYPASS IO is enabled on this handle
+    FO_REMOTE_ORIGIN = &H01000000
+    FO_DISALLOW_EXCLUSIVE = &H02000000
+    FO_SKIP_COMPLETION_PORT = FO_DISALLOW_EXCLUSIVE
+    FO_SKIP_SET_EVENT = &H04000000
+    FO_SKIP_SET_FAST_IO = &H08000000
+    FO_INDIRECT_WAIT_OBJECT = &H10000000
+    FO_SECTION_MINSTORE_TREATMENT = &H20000000
+End Enum
+Public Type FILE_OBJECT
+    Type                 As Integer
+    Size                 As Integer
+    DeviceObject         As LongPtr 'PDEVICE_OBJECT
+    Vpb                  As LongPtr 'PVBP
+    FsContext            As LongPtr
+    FsContext2           As LongPtr
+    SectionObjectPointer As LongPtr 'PSECTION_OBJECT_POINTERS
+    PrivateCacheMap      As LongPtr
+    FinalStatus          As NTSTATUS
+    RelatedFileObject    As LongPtr
+    LockOperation        As Byte
+    DeletePending        As Byte
+    ReadAccess           As Byte
+    WriteAccess          As Byte
+    DeleteAccess         As Byte
+    SharedRead           As Byte
+    SharedWrite          As Byte
+    SharedDelete         As Byte
+    Flags                As FILE_OBJECT_FLAGS
+    FileName             As UNICODE_STRING
+    CurrentByteOffset    As LARGE_INTEGER
+    Waiters              As Long
+    Busy                 As Long
+    LastLock             As LongPtr
+    Lock                 As KEVENT
+    Event                As KEVENT
+    CompletionContext    As LongPtr 'PIO_COMPLETION_CONTEXT
+    IrpListLock          As LongPtr
+    IrpList              As LIST_ENTRY
+    FileObjectExtension  As LongPtr
+End Type 'Expected size x64=0xD8, x86=0x80
+Public Type SECTION_OBJECT_POINTERS
+    DataSectionObject As LongPtr
+    SharedCacheMap As LongPtr
+    ImageSectionObject As LongPtr
+End Type
+Public Type IO_COMPLETION_CONTEXT
+    Port As LongPtr
+    Key As LongPtr
+    ' Used to prevent the completion context IOCP from being removed or
+    ' replaced when it's being used. Note that because this field is protected
+    ' by a spin lock, for perf reasons this value is only updated in code
+    ' paths that are not already protected by other mechanisms. For example,
+    ' the IOCP removal/replacement code already fails if there are any IRPs
+    ' queued to the file object, therefore this value does not need to be
+    ' updated when completing an IRP that is queued to a file object. The
+    ' initial value is 0.
+    UsageCount As LongPtr
+End Type
+Public Enum VBP_FLAGS
+    VPB_MOUNTED = &H0001
+    VPB_LOCKED = &H0002
+    VPB_PERSISTENT = &H0004
+    VPB_REMOVE_PENDING = &H0008
+    VPB_RAW_MOUNT = &H0010
+    VPB_DIRECT_WRITES_ALLOWED = &H0020
+    '(NTDDI_VERSION  = >= NTDDI_WIN10_CO)
+'   When set, BypassIO is completly disabled on this volume meaning filter,
+'   volume and storage stack components will see all read/write operations.
+    VPB_FLAGS_BYPASSIO_BLOCKED = &H0040
+'   Flag that this VPB is for a volume that is being dismounted.
+'   (Note: this flag is likely temporary.)
+    VPB_DISMOUNTING = &H0080
+End Enum
+Public Const MAXIMUM_VOLUME_LABEL_LENGTH = 32 * LenB(Of Integer)
+Public Type VPB
+    Type As Integer
+    Size As Integer
+    Flags As Integer
+    VolumeLabelLength As Integer ' in bytes
+    DeviceObject As LongPtr 'PDEVICE_OBJECT
+    RealDevice As LongPtr 'PDEVICE_OBJECT
+    SerialNumber As Long
+    ReferenceCount As Long
+    VolumeLabel(0 To ((MAXIMUM_VOLUME_LABEL_LENGTH / LenB(Of Integer)) - 1)) As Integer
+End Type
+
+Public Enum POOL_TYPE
+    NonPagedPool = 0
+    NonPagedPoolExecute = NonPagedPool
+    PagedPool = 1
+    NonPagedPoolMustSucceed = NonPagedPool + 2
+    DontUseThisType = 2
+    NonPagedPoolCacheAligned = NonPagedPool + 4
+    PagedPoolCacheAligned = 3
+    NonPagedPoolCacheAlignedMustS = NonPagedPool + 6
+    MaxPoolType = 4
+    NonPagedPoolBase = 0
+    NonPagedPoolBaseMustSucceed = NonPagedPoolBase + 2
+    NonPagedPoolBaseCacheAligned = NonPagedPoolBase + 4
+    NonPagedPoolBaseCacheAlignedMustS = NonPagedPoolBase + 6
+    NonPagedPoolSession = 32
+    PagedPoolSession = NonPagedPoolSession + 1
+    NonPagedPoolMustSucceedSession = PagedPoolSession + 1
+    DontUseThisTypeSession = NonPagedPoolMustSucceedSession + 1
+    NonPagedPoolCacheAlignedSession = DontUseThisTypeSession + 1
+    PagedPoolCacheAlignedSession = NonPagedPoolCacheAlignedSession + 1
+    NonPagedPoolCacheAlignedMustSSession = PagedPoolCacheAlignedSession + 1
+    NonPagedPoolNx = 512
+    NonPagedPoolNxCacheAligned = NonPagedPoolNx + 4
+    NonPagedPoolSessionNx = NonPagedPoolNx + 32
+End Enum
+
+Public Enum MODE
+    KernelMode
+    UserMode
+    MaximumMode
+End Enum
+
+'IRQLs for KeGetCurrentIrql:
+Public Const PASSIVE_LEVEL As Byte = 0
+Public Const LOW_LEVEL As Byte = 0
+Public Const APC_LEVEL As Byte = 1
+Public Const DISPATCH_LEVEL As Byte = 2
+
+
+
+Public Const IO_NO_INCREMENT        As Long = &H0
+
+Public Const IRP_MJ_CREATE  = &H00
+Public Const IRP_MJ_CREATE_NAMED_PIPE  = &H01
+Public Const IRP_MJ_CLOSE  = &H02
+Public Const IRP_MJ_READ  = &H03
+Public Const IRP_MJ_WRITE  = &H04
+Public Const IRP_MJ_QUERY_INFORMATION  = &H05
+Public Const IRP_MJ_SET_INFORMATION  = &H06
+Public Const IRP_MJ_QUERY_EA  = &H07
+Public Const IRP_MJ_SET_EA  = &H08
+Public Const IRP_MJ_FLUSH_BUFFERS  = &H09
+Public Const IRP_MJ_QUERY_VOLUME_INFORMATION  = &H0a
+Public Const IRP_MJ_SET_VOLUME_INFORMATION  = &H0b
+Public Const IRP_MJ_DIRECTORY_CONTROL  = &H0c
+Public Const IRP_MJ_FILE_SYSTEM_CONTROL  = &H0d
+Public Const IRP_MJ_DEVICE_CONTROL  = &H0e
+Public Const IRP_MJ_INTERNAL_DEVICE_CONTROL  = &H0f
+Public Const IRP_MJ_SHUTDOWN  = &H10
+Public Const IRP_MJ_LOCK_CONTROL  = &H11
+Public Const IRP_MJ_CLEANUP  = &H12
+Public Const IRP_MJ_CREATE_MAILSLOT  = &H13
+Public Const IRP_MJ_QUERY_SECURITY  = &H14
+Public Const IRP_MJ_SET_SECURITY  = &H15
+Public Const IRP_MJ_POWER  = &H16
+Public Const IRP_MJ_SYSTEM_CONTROL  = &H17
+Public Const IRP_MJ_DEVICE_CHANGE  = &H18
+Public Const IRP_MJ_QUERY_QUOTA  = &H19
+Public Const IRP_MJ_SET_QUOTA  = &H1A
+Public Const IRP_MJ_PNP  = &H1B
+
+Public Const IRP_MJ_MAXIMUM_FUNCTION As Long = &H1B
+
+Public Const IRP_MJ_SCSI  = IRP_MJ_INTERNAL_DEVICE_CONTROL
+
+Public Const IRP_MN_SCSI_CLASS  = &H01
+
+'PNP minor function codes.
+Public Const IRP_MN_START_DEVICE  = &H00
+Public Const IRP_MN_QUERY_REMOVE_DEVICE  = &H01
+Public Const IRP_MN_REMOVE_DEVICE  = &H02
+Public Const IRP_MN_CANCEL_REMOVE_DEVICE  = &H03
+Public Const IRP_MN_STOP_DEVICE  = &H04
+Public Const IRP_MN_QUERY_STOP_DEVICE  = &H05
+
+Public Const IRP_MN_CANCEL_STOP_DEVICE  = &H06
+Public Const IRP_MN_QUERY_DEVICE_RELATIONS  = &H07
+Public Const IRP_MN_QUERY_INTERFACE  = &H08
+Public Const IRP_MN_QUERY_CAPABILITIES  = &H09
+Public Const IRP_MN_QUERY_RESOURCES  = &H0A
+Public Const IRP_MN_QUERY_RESOURCE_REQUIREMENTS  = &H0B
+
+Public Const IRP_MN_QUERY_DEVICE_TEXT  = &H0C
+Public Const IRP_MN_FILTER_RESOURCE_REQUIREMENTS  = &H0D
+Public Const IRP_MN_READ_CONFIG  = &H0F
+Public Const IRP_MN_WRITE_CONFIG  = &H10
+Public Const IRP_MN_EJECT  = &H11
+Public Const IRP_MN_SET_LOCK  = &H12
+Public Const IRP_MN_QUERY_ID  = &H13
+Public Const IRP_MN_QUERY_PNP_DEVICE_STATE  = &H14
+Public Const IRP_MN_QUERY_BUS_INFORMATION  = &H15
+Public Const IRP_MN_DEVICE_USAGE_NOTIFICATION  = &H16
+Public Const IRP_MN_SURPRISE_REMOVAL  = &H17
+
+Public Const IRP_MN_DEVICE_ENUMERATED  = &H19
+
+'POWER minor function codes
+Public Const IRP_MN_WAIT_WAKE  = &H00
+Public Const IRP_MN_POWER_SEQUENCE  = &H01
+Public Const IRP_MN_SET_POWER  = &H02
+Public Const IRP_MN_QUERY_POWER  = &H03
+
+'WMI minor function codes under IRP_MJ_SYSTEM_CONTROL
+Public Const IRP_MN_QUERY_ALL_DATA  = &H00
+Public Const IRP_MN_QUERY_SINGLE_INSTANCE  = &H01
+Public Const IRP_MN_CHANGE_SINGLE_INSTANCE  = &H02
+Public Const IRP_MN_CHANGE_SINGLE_ITEM  = &H03
+Public Const IRP_MN_ENABLE_EVENTS  = &H04
+Public Const IRP_MN_DISABLE_EVENTS  = &H05
+Public Const IRP_MN_ENABLE_COLLECTION  = &H06
+Public Const IRP_MN_DISABLE_COLLECTION  = &H07
+Public Const IRP_MN_REGINFO  = &H08
+Public Const IRP_MN_EXECUTE_METHOD  = &H09
+'  Minor code 0x0a is reserved
+Public Const IRP_MN_REGINFO_EX  = &H0b
+
+Public Const RTL_REGISTRY_ABSOLUTE  = 0  ' Path is a full path
+Public Const RTL_REGISTRY_SERVICES  = 1  ' \Registry\Machine\System\CurrentControlSet\Services
+Public Const RTL_REGISTRY_CONTROL  = 2  ' \Registry\Machine\System\CurrentControlSet\Control
+Public Const RTL_REGISTRY_WINDOWS_NT  = 3  ' \Registry\Machine\Software\Microsoft\Windows NT\CurrentVersion
+Public Const RTL_REGISTRY_DEVICEMAP  = 4  ' \Registry\Machine\Hardware\DeviceMap
+Public Const RTL_REGISTRY_USER  = 5  ' \Registry\User\CurrentUser
+Public Const RTL_REGISTRY_MAXIMUM  = 6
+Public Const RTL_REGISTRY_HANDLE  = &H40000000  ' Low order bits are registry handle
+Public Const RTL_REGISTRY_OPTIONAL  = &H80000000  ' Indicates the key node is optional
+
+Public Const RTL_QUERY_REGISTRY_SUBKEY  = &H00000001    ' Name is a subkey and remainder of
+                                                        '  table or until next subkey are value
+                                                        '  names for that subkey to look at.
+Public Const RTL_QUERY_REGISTRY_TOPKEY  = &H00000002    ' Reset current key to original key for
+                                                        '  this and all following table entries.
+Public Const RTL_QUERY_REGISTRY_REQUIRED  = &H00000004  ' Fail if no match found for this table
+                                                        '  entry.
+Public Const RTL_QUERY_REGISTRY_NOVALUE  = &H00000008   ' Used to mark a table entry that has no
+                                                        '  value name, just wants a call out, not
+                                                        '  an enumeration of all values.
+Public Const RTL_QUERY_REGISTRY_NOEXPAND  = &H00000010  ' Used to suppress the expansion of
+                                                        '  REG_MULTI_SZ into multiple callouts or
+                                                        '  to prevent the expansion of environment
+                                                        '  variable values in REG_EXPAND_SZ
+Public Const RTL_QUERY_REGISTRY_DIRECT  = &H00000020    ' QueryRoutine field ignored.  EntryContext
+                                                        '  field points to location to store value.
+                                                        '  For null terminated strings, EntryContext
+                                                        '  points to UNICODE_STRING structure that
+                                                        '  that describes maximum size of buffer.
+                                                        '  If .Buffer field is NULL then a buffer is
+                                                        '  allocated.
+Public Const RTL_QUERY_REGISTRY_DELETE  = &H00000040    ' Used to delete value keys after they
+                                                        '  are queried.
+Public Const RTL_QUERY_REGISTRY_NOSTRING  = &H00000080  ' THIS IS DEPRECATED - use RTL_QUERY_REGISTRY_TYPECHECK
+                                                        '  Used with RTL_QUERY_REGISTRY_DIRECT in
+                                                        '  cases where the caller expects a
+                                                        '  non-string value.  Otherwise, the
+                                                        '  assumption that EntryContext points to
+                                                        '  a UNICODE_STRING structure can overrun
+                                                        '  the caller's buffer.
+Public Const RTL_QUERY_REGISTRY_TYPECHECK  = &H00000100 ' Used with RTL_QUERY_REGISTRY_DIRECT to
+                                                        '  validate the registry value type
+                                                        '  expected by caller with actual type thats
+                                                        '  read from the registry.
+                                                        '  Use the most significant byte of DefaultType from QueryTable, as the
+                                                        '  caller's expected REG_TYPE
+Public Const RTL_QUERY_REGISTRY_TYPECHECK_SHIFT  = 24
+Public Const RTL_QUERY_REGISTRY_TYPECHECK_MASK  = (&Hff << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT)
+
+Public Const REG_NONE  = (0)  ' No value type
+Public Const REG_SZ  = (1)  ' Unicode nul terminated string
+Public Const REG_EXPAND_SZ  = (2)  ' Unicode nul terminated string
+                                    '  (with environment variable references)
+Public Const REG_BINARY  = (3)  ' Free form binary
+Public Const REG_DWORD  = (4)  ' 32-bit number
+Public Const REG_DWORD_LITTLE_ENDIAN  = (4)  ' 32-bit number (same as REG_DWORD)
+Public Const REG_DWORD_BIG_ENDIAN  = (5)  ' 32-bit number
+Public Const REG_LINK  = (6)  ' Symbolic Link (unicode)
+Public Const REG_MULTI_SZ  = (7)  ' Multiple Unicode strings
+Public Const REG_RESOURCE_LIST  = (8)  ' Resource list in the resource map
+Public Const REG_FULL_RESOURCE_DESCRIPTOR  = (9)  ' Resource list in the hardware description
+Public Const REG_RESOURCE_REQUIREMENTS_LIST  = (10)
+Public Const REG_QWORD  = (11)  ' 64-bit number
+Public Const REG_QWORD_LITTLE_ENDIAN  = (11)  ' 64-bit number (same as REG_QWORD)
+
+
+Public Type RTL_QUERY_REGISTRY_TABLE
+    QueryRoutine As LongPtr
+    Flags As Long
+    Name As LongPtr
+    EntryContext As LongPtr
+    DefaultType As Long
+    DefaultData As LongPtr
+    DefaultLength As Long
+End Type
+
+Public Enum NTSTATUS
+    STATUS_SUCCESS = &H00000000
+    STATUS_WAIT_0 = &H00000000
+    STATUS_WAIT_1 = &H00000001
+    STATUS_WAIT_2 = &H00000002
+    STATUS_WAIT_3 = &H00000003
+    STATUS_WAIT_63 = &H0000003F
+    STATUS_ABANDONED = &H00000080
+    STATUS_ABANDONED_WAIT_0 = &H00000080
+    STATUS_ABANDONED_WAIT_63 = &H000000BF
+    STATUS_USER_APC = &H000000C0
+    STATUS_KERNEL_APC = &H00000100
+    STATUS_ALERTED = &H00000101
+    STATUS_TIMEOUT = &H00000102
+    STATUS_PENDING = &H00000103
+    STATUS_REPARSE = &H00000104
+    STATUS_MORE_ENTRIES = &H00000105
+    STATUS_NOT_ALL_ASSIGNED = &H00000106
+    STATUS_SOME_NOT_MAPPED = &H00000107
+    STATUS_OPLOCK_BREAK_IN_PROGRESS = &H00000108
+    STATUS_VOLUME_MOUNTED = &H00000109
+    STATUS_RXACT_COMMITTED = &H0000010A
+    STATUS_NOTIFY_CLEANUP = &H0000010B
+    STATUS_NOTIFY_ENUM_DIR = &H0000010C
+    STATUS_NO_QUOTAS_FOR_ACCOUNT = &H0000010D
+    STATUS_PRIMARY_TRANSPORT_CONNECT_FAILED = &H0000010E
+    STATUS_PAGE_FAULT_TRANSITION = &H00000110
+    STATUS_PAGE_FAULT_DEMAND_ZERO = &H00000111
+    STATUS_PAGE_FAULT_COPY_ON_WRITE = &H00000112
+    STATUS_PAGE_FAULT_GUARD_PAGE = &H00000113
+    STATUS_PAGE_FAULT_PAGING_FILE = &H00000114
+    STATUS_CACHE_PAGE_LOCKED = &H00000115
+    STATUS_CRASH_DUMP = &H00000116
+    STATUS_BUFFER_ALL_ZEROS = &H00000117
+    STATUS_REPARSE_OBJECT = &H00000118
+    STATUS_RESOURCE_REQUIREMENTS_CHANGED = &H00000119
+    STATUS_TRANSLATION_COMPLETE = &H00000120
+    STATUS_DS_MEMBERSHIP_EVALUATED_LOCALLY = &H00000121
+    STATUS_NOTHING_TO_TERMINATE = &H00000122
+    STATUS_PROCESS_NOT_IN_JOB = &H00000123
+    STATUS_PROCESS_IN_JOB = &H00000124
+    STATUS_VOLSNAP_HIBERNATE_READY = &H00000125
+    STATUS_FSFILTER_OP_COMPLETED_SUCCESSFULLY = &H00000126
+    DBG_EXCEPTION_HANDLED = &H00010001
+    DBG_CONTINUE = &H00010002
+    STATUS_OBJECT_NAME_EXISTS = &H40000000
+    STATUS_THREAD_WAS_SUSPENDED = &H40000001
+    STATUS_WORKING_SET_LIMIT_RANGE = &H40000002
+    STATUS_IMAGE_NOT_AT_BASE = &H40000003
+    STATUS_RXACT_STATE_CREATED = &H40000004
+    STATUS_SEGMENT_NOTIFICATION = &H40000005
+    STATUS_LOCAL_USER_SESSION_KEY = &H40000006
+    STATUS_BAD_CURRENT_DIRECTORY = &H40000007
+    STATUS_SERIAL_MORE_WRITES = &H40000008
+    STATUS_REGISTRY_RECOVERED = &H40000009
+    STATUS_FT_READ_RECOVERY_FROM_BACKUP = &H4000000A
+    STATUS_FT_WRITE_RECOVERY = &H4000000B
+    STATUS_SERIAL_COUNTER_TIMEOUT = &H4000000C
+    STATUS_NULL_LM_PASSWORD = &H4000000D
+    STATUS_IMAGE_MACHINE_TYPE_MISMATCH = &H4000000E
+    STATUS_RECEIVE_PARTIAL = &H4000000F
+    STATUS_RECEIVE_EXPEDITED = &H40000010
+    STATUS_RECEIVE_PARTIAL_EXPEDITED = &H40000011
+    STATUS_EVENT_DONE = &H40000012
+    STATUS_EVENT_PENDING = &H40000013
+    STATUS_CHECKING_FILE_SYSTEM = &H40000014
+    STATUS_FATAL_APP_EXIT = &H40000015
+    STATUS_PREDEFINED_HANDLE = &H40000016
+    STATUS_WAS_UNLOCKED = &H40000017
+    STATUS_SERVICE_NOTIFICATION = &H40000018
+    STATUS_WAS_LOCKED = &H40000019
+    STATUS_LOG_HARD_ERROR = &H4000001A
+    STATUS_ALREADY_WIN32 = &H4000001B
+    STATUS_WX86_UNSIMULATE = &H4000001C
+    STATUS_WX86_CONTINUE = &H4000001D
+    STATUS_WX86_SINGLE_STEP = &H4000001E
+    STATUS_WX86_BREAKPOINT = &H4000001F
+    STATUS_WX86_EXCEPTION_CONTINUE = &H40000020
+    STATUS_WX86_EXCEPTION_LASTCHANCE = &H40000021
+    STATUS_WX86_EXCEPTION_CHAIN = &H40000022
+    STATUS_IMAGE_MACHINE_TYPE_MISMATCH_EXE = &H40000023
+    STATUS_NO_YIELD_PERFORMED = &H40000024
+    STATUS_TIMER_RESUME_IGNORED = &H40000025
+    STATUS_ARBITRATION_UNHANDLED = &H40000026
+    STATUS_CARDBUS_NOT_SUPPORTED = &H40000027
+    STATUS_WX86_CREATEWX86TIB = &H40000028
+    STATUS_MP_PROCESSOR_MISMATCH = &H40000029
+    STATUS_HIBERNATED = &H4000002A
+    STATUS_RESUME_HIBERNATION = &H4000002B
+    STATUS_FIRMWARE_UPDATED = &H4000002C
+    STATUS_DRIVERS_LEAKING_LOCKED_PAGES = &H4000002D
+    DBG_REPLY_LATER = &H40010001
+    DBG_UNABLE_TO_PROVIDE_HANDLE = &H40010002
+    DBG_TERMINATE_THREAD = &H40010003
+    DBG_TERMINATE_PROCESS = &H40010004
+    DBG_CONTROL_C = &H40010005
+    DBG_PRINTEXCEPTION_C = &H40010006
+    DBG_RIPEXCEPTION = &H40010007
+    DBG_CONTROL_BREAK = &H40010008
+    DBG_COMMAND_EXCEPTION = &H40010009
+    STATUS_GUARD_PAGE_VIOLATION = &H80000001
+    STATUS_DATATYPE_MISALIGNMENT = &H80000002
+    STATUS_BREAKPOINT = &H80000003
+    STATUS_SINGLE_STEP = &H80000004
+    STATUS_BUFFER_OVERFLOW = &H80000005
+    STATUS_NO_MORE_FILES = &H80000006
+    STATUS_WAKE_SYSTEM_DEBUGGER = &H80000007
+    STATUS_HANDLES_CLOSED = &H8000000A
+    STATUS_NO_INHERITANCE = &H8000000B
+    STATUS_GUID_SUBSTITUTION_MADE = &H8000000C
+    STATUS_PARTIAL_COPY = &H8000000D
+    STATUS_DEVICE_PAPER_EMPTY = &H8000000E
+    STATUS_DEVICE_POWERED_OFF = &H8000000F
+    STATUS_DEVICE_OFF_LINE = &H80000010
+    STATUS_DEVICE_BUSY = &H80000011
+    STATUS_NO_MORE_EAS = &H80000012
+    STATUS_INVALID_EA_NAME = &H80000013
+    STATUS_EA_LIST_INCONSISTENT = &H80000014
+    STATUS_INVALID_EA_FLAG = &H80000015
+    STATUS_VERIFY_REQUIRED = &H80000016
+    STATUS_EXTRANEOUS_INFORMATION = &H80000017
+    STATUS_RXACT_COMMIT_NECESSARY = &H80000018
+    STATUS_NO_MORE_ENTRIES = &H8000001A
+    STATUS_FILEMARK_DETECTED = &H8000001B
+    STATUS_MEDIA_CHANGED = &H8000001C
+    STATUS_BUS_RESET = &H8000001D
+    STATUS_END_OF_MEDIA = &H8000001E
+    STATUS_BEGINNING_OF_MEDIA = &H8000001F
+    STATUS_MEDIA_CHECK = &H80000020
+    STATUS_SETMARK_DETECTED = &H80000021
+    STATUS_NO_DATA_DETECTED = &H80000022
+    STATUS_REDIRECTOR_HAS_OPEN_HANDLES = &H80000023
+    STATUS_SERVER_HAS_OPEN_HANDLES = &H80000024
+    STATUS_ALREADY_DISCONNECTED = &H80000025
+    STATUS_LONGJUMP = &H80000026
+    STATUS_CLEANER_CARTRIDGE_INSTALLED = &H80000027
+    STATUS_PLUGPLAY_QUERY_VETOED = &H80000028
+    STATUS_UNWIND_CONSOLIDATE = &H80000029
+    STATUS_REGISTRY_HIVE_RECOVERED = &H8000002A
+    STATUS_DLL_MIGHT_BE_INSECURE = &H8000002B
+    STATUS_DLL_MIGHT_BE_INCOMPATIBLE = &H8000002C
+    DBG_EXCEPTION_NOT_HANDLED = &H80010001
+    STATUS_CLUSTER_NODE_ALREADY_UP = &H80130001
+    STATUS_CLUSTER_NODE_ALREADY_DOWN = &H80130002
+    STATUS_CLUSTER_NETWORK_ALREADY_ONLINE = &H80130003
+    STATUS_CLUSTER_NETWORK_ALREADY_OFFLINE = &H80130004
+    STATUS_CLUSTER_NODE_ALREADY_MEMBER = &H80130005
+    STATUS_UNSUCCESSFUL = &HC0000001
+    STATUS_NOT_IMPLEMENTED = &HC0000002
+    STATUS_INVALID_INFO_CLASS = &HC0000003
+    STATUS_INFO_LENGTH_MISMATCH = &HC0000004
+    STATUS_ACCESS_VIOLATION = &HC0000005
+    STATUS_IN_PAGE_ERROR = &HC0000006
+    STATUS_PAGEFILE_QUOTA = &HC0000007
+    STATUS_INVALID_HANDLE = &HC0000008
+    STATUS_BAD_INITIAL_STACK = &HC0000009
+    STATUS_BAD_INITIAL_PC = &HC000000A
+    STATUS_INVALID_CID = &HC000000B
+    STATUS_TIMER_NOT_CANCELED = &HC000000C
+    STATUS_INVALID_PARAMETER = &HC000000D
+    STATUS_NO_SUCH_DEVICE = &HC000000E
+    STATUS_NO_SUCH_FILE = &HC000000F
+    STATUS_INVALID_DEVICE_REQUEST = &HC0000010
+    STATUS_END_OF_FILE = &HC0000011
+    STATUS_WRONG_VOLUME = &HC0000012
+    STATUS_NO_MEDIA_IN_DEVICE = &HC0000013
+    STATUS_UNRECOGNIZED_MEDIA = &HC0000014
+    STATUS_NONEXISTENT_SECTOR = &HC0000015
+    STATUS_MORE_PROCESSING_REQUIRED = &HC0000016
+    STATUS_NO_MEMORY = &HC0000017
+    STATUS_CONFLICTING_ADDRESSES = &HC0000018
+    STATUS_NOT_MAPPED_VIEW = &HC0000019
+    STATUS_UNABLE_TO_FREE_VM = &HC000001A
+    STATUS_UNABLE_TO_DELETE_SECTION = &HC000001B
+    STATUS_INVALID_SYSTEM_SERVICE = &HC000001C
+    STATUS_ILLEGAL_INSTRUCTION = &HC000001D
+    STATUS_INVALID_LOCK_SEQUENCE = &HC000001E
+    STATUS_INVALID_VIEW_SIZE = &HC000001F
+    STATUS_INVALID_FILE_FOR_SECTION = &HC0000020
+    STATUS_ALREADY_COMMITTED = &HC0000021
+    STATUS_ACCESS_DENIED = &HC0000022
+    STATUS_BUFFER_TOO_SMALL = &HC0000023
+    STATUS_OBJECT_TYPE_MISMATCH = &HC0000024
+    STATUS_NONCONTINUABLE_EXCEPTION = &HC0000025
+    STATUS_INVALID_DISPOSITION = &HC0000026
+    STATUS_UNWIND = &HC0000027
+    STATUS_BAD_STACK = &HC0000028
+    STATUS_INVALID_UNWIND_TARGET = &HC0000029
+    STATUS_NOT_LOCKED = &HC000002A
+    STATUS_PARITY_ERROR = &HC000002B
+    STATUS_UNABLE_TO_DECOMMIT_VM = &HC000002C
+    STATUS_NOT_COMMITTED = &HC000002D
+    STATUS_INVALID_PORT_ATTRIBUTES = &HC000002E
+    STATUS_PORT_MESSAGE_TOO_LONG = &HC000002F
+    STATUS_INVALID_PARAMETER_MIX = &HC0000030
+    STATUS_INVALID_QUOTA_LOWER = &HC0000031
+    STATUS_DISK_CORRUPT_ERROR = &HC0000032
+    STATUS_OBJECT_NAME_INVALID = &HC0000033
+    STATUS_OBJECT_NAME_NOT_FOUND = &HC0000034
+    STATUS_OBJECT_NAME_COLLISION = &HC0000035
+    STATUS_PORT_DISCONNECTED = &HC0000037
+    STATUS_DEVICE_ALREADY_ATTACHED = &HC0000038
+    STATUS_OBJECT_PATH_INVALID = &HC0000039
+    STATUS_OBJECT_PATH_NOT_FOUND = &HC000003A
+    STATUS_OBJECT_PATH_SYNTAX_BAD = &HC000003B
+    STATUS_DATA_OVERRUN = &HC000003C
+    STATUS_DATA_LATE_ERROR = &HC000003D
+    STATUS_DATA_ERROR = &HC000003E
+    STATUS_CRC_ERROR = &HC000003F
+    STATUS_SECTION_TOO_BIG = &HC0000040
+    STATUS_PORT_CONNECTION_REFUSED = &HC0000041
+    STATUS_INVALID_PORT_HANDLE = &HC0000042
+    STATUS_SHARING_VIOLATION = &HC0000043
+    STATUS_QUOTA_EXCEEDED = &HC0000044
+    STATUS_INVALID_PAGE_PROTECTION = &HC0000045
+    STATUS_MUTANT_NOT_OWNED = &HC0000046
+    STATUS_SEMAPHORE_LIMIT_EXCEEDED = &HC0000047
+    STATUS_PORT_ALREADY_SET = &HC0000048
+    STATUS_SECTION_NOT_IMAGE = &HC0000049
+    STATUS_SUSPEND_COUNT_EXCEEDED = &HC000004A
+    STATUS_THREAD_IS_TERMINATING = &HC000004B
+    STATUS_BAD_WORKING_SET_LIMIT = &HC000004C
+    STATUS_INCOMPATIBLE_FILE_MAP = &HC000004D
+    STATUS_SECTION_PROTECTION = &HC000004E
+    STATUS_EAS_NOT_SUPPORTED = &HC000004F
+    STATUS_EA_TOO_LARGE = &HC0000050
+    STATUS_NONEXISTENT_EA_ENTRY = &HC0000051
+    STATUS_NO_EAS_ON_FILE = &HC0000052
+    STATUS_EA_CORRUPT_ERROR = &HC0000053
+    STATUS_FILE_LOCK_CONFLICT = &HC0000054
+    STATUS_LOCK_NOT_GRANTED = &HC0000055
+    STATUS_DELETE_PENDING = &HC0000056
+    STATUS_CTL_FILE_NOT_SUPPORTED = &HC0000057
+    STATUS_UNKNOWN_REVISION = &HC0000058
+    STATUS_REVISION_MISMATCH = &HC0000059
+    STATUS_INVALID_OWNER = &HC000005A
+    STATUS_INVALID_PRIMARY_GROUP = &HC000005B
+    STATUS_NO_IMPERSONATION_TOKEN = &HC000005C
+    STATUS_CANT_DISABLE_MANDATORY = &HC000005D
+    STATUS_NO_LOGON_SERVERS = &HC000005E
+    STATUS_NO_SUCH_LOGON_SESSION = &HC000005F
+    STATUS_NO_SUCH_PRIVILEGE = &HC0000060
+    STATUS_PRIVILEGE_NOT_HELD = &HC0000061
+    STATUS_INVALID_ACCOUNT_NAME = &HC0000062
+    STATUS_USER_EXISTS = &HC0000063
+    STATUS_NO_SUCH_USER = &HC0000064
+    STATUS_GROUP_EXISTS = &HC0000065
+    STATUS_NO_SUCH_GROUP = &HC0000066
+    STATUS_MEMBER_IN_GROUP = &HC0000067
+    STATUS_MEMBER_NOT_IN_GROUP = &HC0000068
+    STATUS_LAST_ADMIN = &HC0000069
+    STATUS_WRONG_PASSWORD = &HC000006A
+    STATUS_ILL_FORMED_PASSWORD = &HC000006B
+    STATUS_PASSWORD_RESTRICTION = &HC000006C
+    STATUS_LOGON_FAILURE = &HC000006D
+    STATUS_ACCOUNT_RESTRICTION = &HC000006E
+    STATUS_INVALID_LOGON_HOURS = &HC000006F
+    STATUS_INVALID_WORKSTATION = &HC0000070
+    STATUS_PASSWORD_EXPIRED = &HC0000071
+    STATUS_ACCOUNT_DISABLED = &HC0000072
+    STATUS_NONE_MAPPED = &HC0000073
+    STATUS_TOO_MANY_LUIDS_REQUESTED = &HC0000074
+    STATUS_LUIDS_EXHAUSTED = &HC0000075
+    STATUS_INVALID_SUB_AUTHORITY = &HC0000076
+    STATUS_INVALID_ACL = &HC0000077
+    STATUS_INVALID_SID = &HC0000078
+    STATUS_INVALID_SECURITY_DESCR = &HC0000079
+    STATUS_PROCEDURE_NOT_FOUND = &HC000007A
+    STATUS_INVALID_IMAGE_FORMAT = &HC000007B
+    STATUS_NO_TOKEN = &HC000007C
+    STATUS_BAD_INHERITANCE_ACL = &HC000007D
+    STATUS_RANGE_NOT_LOCKED = &HC000007E
+    STATUS_DISK_FULL = &HC000007F
+    STATUS_SERVER_DISABLED = &HC0000080
+    STATUS_SERVER_NOT_DISABLED = &HC0000081
+    STATUS_TOO_MANY_GUIDS_REQUESTED = &HC0000082
+    STATUS_GUIDS_EXHAUSTED = &HC0000083
+    STATUS_INVALID_ID_AUTHORITY = &HC0000084
+    STATUS_AGENTS_EXHAUSTED = &HC0000085
+    STATUS_INVALID_VOLUME_LABEL = &HC0000086
+    STATUS_SECTION_NOT_EXTENDED = &HC0000087
+    STATUS_NOT_MAPPED_DATA = &HC0000088
+    STATUS_RESOURCE_DATA_NOT_FOUND = &HC0000089
+    STATUS_RESOURCE_TYPE_NOT_FOUND = &HC000008A
+    STATUS_RESOURCE_NAME_NOT_FOUND = &HC000008B
+    STATUS_ARRAY_BOUNDS_EXCEEDED = &HC000008C
+    STATUS_FLOAT_DENORMAL_OPERAND = &HC000008D
+    STATUS_FLOAT_DIVIDE_BY_ZERO = &HC000008E
+    STATUS_FLOAT_INEXACT_RESULT = &HC000008F
+    STATUS_FLOAT_INVALID_OPERATION = &HC0000090
+    STATUS_FLOAT_OVERFLOW = &HC0000091
+    STATUS_FLOAT_STACK_CHECK = &HC0000092
+    STATUS_FLOAT_UNDERFLOW = &HC0000093
+    STATUS_INTEGER_DIVIDE_BY_ZERO = &HC0000094
+    STATUS_INTEGER_OVERFLOW = &HC0000095
+    STATUS_PRIVILEGED_INSTRUCTION = &HC0000096
+    STATUS_TOO_MANY_PAGING_FILES = &HC0000097
+    STATUS_FILE_INVALID = &HC0000098
+    STATUS_ALLOTTED_SPACE_EXCEEDED = &HC0000099
+    STATUS_INSUFFICIENT_RESOURCES = &HC000009A
+    STATUS_DFS_EXIT_PATH_FOUND = &HC000009B
+    STATUS_DEVICE_DATA_ERROR = &HC000009C
+    STATUS_DEVICE_NOT_CONNECTED = &HC000009D
+    STATUS_DEVICE_POWER_FAILURE = &HC000009E
+    STATUS_FREE_VM_NOT_AT_BASE = &HC000009F
+    STATUS_MEMORY_NOT_ALLOCATED = &HC00000A0
+    STATUS_WORKING_SET_QUOTA = &HC00000A1
+    STATUS_MEDIA_WRITE_PROTECTED = &HC00000A2
+    STATUS_DEVICE_NOT_READY = &HC00000A3
+    STATUS_INVALID_GROUP_ATTRIBUTES = &HC00000A4
+    STATUS_BAD_IMPERSONATION_LEVEL = &HC00000A5
+    STATUS_CANT_OPEN_ANONYMOUS = &HC00000A6
+    STATUS_BAD_VALIDATION_CLASS = &HC00000A7
+    STATUS_BAD_TOKEN_TYPE = &HC00000A8
+    STATUS_BAD_MASTER_BOOT_RECORD = &HC00000A9
+    STATUS_INSTRUCTION_MISALIGNMENT = &HC00000AA
+    STATUS_INSTANCE_NOT_AVAILABLE = &HC00000AB
+    STATUS_PIPE_NOT_AVAILABLE = &HC00000AC
+    STATUS_INVALID_PIPE_STATE = &HC00000AD
+    STATUS_PIPE_BUSY = &HC00000AE
+    STATUS_ILLEGAL_FUNCTION = &HC00000AF
+    STATUS_PIPE_DISCONNECTED = &HC00000B0
+    STATUS_PIPE_CLOSING = &HC00000B1
+    STATUS_PIPE_CONNECTED = &HC00000B2
+    STATUS_PIPE_LISTENING = &HC00000B3
+    STATUS_INVALID_READ_MODE = &HC00000B4
+    STATUS_IO_TIMEOUT = &HC00000B5
+    STATUS_FILE_FORCED_CLOSED = &HC00000B6
+    STATUS_PROFILING_NOT_STARTED = &HC00000B7
+    STATUS_PROFILING_NOT_STOPPED = &HC00000B8
+    STATUS_COULD_NOT_INTERPRET = &HC00000B9
+    STATUS_FILE_IS_A_DIRECTORY = &HC00000BA
+    STATUS_NOT_SUPPORTED = &HC00000BB
+    STATUS_REMOTE_NOT_LISTENING = &HC00000BC
+    STATUS_DUPLICATE_NAME = &HC00000BD
+    STATUS_BAD_NETWORK_PATH = &HC00000BE
+    STATUS_NETWORK_BUSY = &HC00000BF
+    STATUS_DEVICE_DOES_NOT_EXIST = &HC00000C0
+    STATUS_TOO_MANY_COMMANDS = &HC00000C1
+    STATUS_ADAPTER_HARDWARE_ERROR = &HC00000C2
+    STATUS_INVALID_NETWORK_RESPONSE = &HC00000C3
+    STATUS_UNEXPECTED_NETWORK_ERROR = &HC00000C4
+    STATUS_BAD_REMOTE_ADAPTER = &HC00000C5
+    STATUS_PRINT_QUEUE_FULL = &HC00000C6
+    STATUS_NO_SPOOL_SPACE = &HC00000C7
+    STATUS_PRINT_CANCELLED = &HC00000C8
+    STATUS_NETWORK_NAME_DELETED = &HC00000C9
+    STATUS_NETWORK_ACCESS_DENIED = &HC00000CA
+    STATUS_BAD_DEVICE_TYPE = &HC00000CB
+    STATUS_BAD_NETWORK_NAME = &HC00000CC
+    STATUS_TOO_MANY_NAMES = &HC00000CD
+    STATUS_TOO_MANY_SESSIONS = &HC00000CE
+    STATUS_SHARING_PAUSED = &HC00000CF
+    STATUS_REQUEST_NOT_ACCEPTED = &HC00000D0
+    STATUS_REDIRECTOR_PAUSED = &HC00000D1
+    STATUS_NET_WRITE_FAULT = &HC00000D2
+    STATUS_PROFILING_AT_LIMIT = &HC00000D3
+    STATUS_NOT_SAME_DEVICE = &HC00000D4
+    STATUS_FILE_RENAMED = &HC00000D5
+    STATUS_VIRTUAL_CIRCUIT_CLOSED = &HC00000D6
+    STATUS_NO_SECURITY_ON_OBJECT = &HC00000D7
+    STATUS_CANT_WAIT = &HC00000D8
+    STATUS_PIPE_EMPTY = &HC00000D9
+    STATUS_CANT_ACCESS_DOMAIN_INFO = &HC00000DA
+    STATUS_CANT_TERMINATE_SELF = &HC00000DB
+    STATUS_INVALID_SERVER_STATE = &HC00000DC
+    STATUS_INVALID_DOMAIN_STATE = &HC00000DD
+    STATUS_INVALID_DOMAIN_ROLE = &HC00000DE
+    STATUS_NO_SUCH_DOMAIN = &HC00000DF
+    STATUS_DOMAIN_EXISTS = &HC00000E0
+    STATUS_DOMAIN_LIMIT_EXCEEDED = &HC00000E1
+    STATUS_OPLOCK_NOT_GRANTED = &HC00000E2
+    STATUS_INVALID_OPLOCK_PROTOCOL = &HC00000E3
+    STATUS_INTERNAL_DB_CORRUPTION = &HC00000E4
+    STATUS_INTERNAL_ERROR = &HC00000E5
+    STATUS_GENERIC_NOT_MAPPED = &HC00000E6
+    STATUS_BAD_DESCRIPTOR_FORMAT = &HC00000E7
+    STATUS_INVALID_USER_BUFFER = &HC00000E8
+    STATUS_UNEXPECTED_IO_ERROR = &HC00000E9
+    STATUS_UNEXPECTED_MM_CREATE_ERR = &HC00000EA
+    STATUS_UNEXPECTED_MM_MAP_ERROR = &HC00000EB
+    STATUS_UNEXPECTED_MM_EXTEND_ERR = &HC00000EC
+    STATUS_NOT_LOGON_PROCESS = &HC00000ED
+    STATUS_LOGON_SESSION_EXISTS = &HC00000EE
+    STATUS_INVALID_PARAMETER_1 = &HC00000EF
+    STATUS_INVALID_PARAMETER_2 = &HC00000F0
+    STATUS_INVALID_PARAMETER_3 = &HC00000F1
+    STATUS_INVALID_PARAMETER_4 = &HC00000F2
+    STATUS_INVALID_PARAMETER_5 = &HC00000F3
+    STATUS_INVALID_PARAMETER_6 = &HC00000F4
+    STATUS_INVALID_PARAMETER_7 = &HC00000F5
+    STATUS_INVALID_PARAMETER_8 = &HC00000F6
+    STATUS_INVALID_PARAMETER_9 = &HC00000F7
+    STATUS_INVALID_PARAMETER_10 = &HC00000F8
+    STATUS_INVALID_PARAMETER_11 = &HC00000F9
+    STATUS_INVALID_PARAMETER_12 = &HC00000FA
+    STATUS_REDIRECTOR_NOT_STARTED = &HC00000FB
+    STATUS_REDIRECTOR_STARTED = &HC00000FC
+    STATUS_STACK_OVERFLOW = &HC00000FD
+    STATUS_NO_SUCH_PACKAGE = &HC00000FE
+    STATUS_BAD_FUNCTION_TABLE = &HC00000FF
+    STATUS_VARIABLE_NOT_FOUND = &HC0000100
+    STATUS_DIRECTORY_NOT_EMPTY = &HC0000101
+    STATUS_FILE_CORRUPT_ERROR = &HC0000102
+    STATUS_NOT_A_DIRECTORY = &HC0000103
+    STATUS_BAD_LOGON_SESSION_STATE = &HC0000104
+    STATUS_LOGON_SESSION_COLLISION = &HC0000105
+    STATUS_NAME_TOO_LONG = &HC0000106
+    STATUS_FILES_OPEN = &HC0000107
+    STATUS_CONNECTION_IN_USE = &HC0000108
+    STATUS_MESSAGE_NOT_FOUND = &HC0000109
+    STATUS_PROCESS_IS_TERMINATING = &HC000010A
+    STATUS_INVALID_LOGON_TYPE = &HC000010B
+    STATUS_NO_GUID_TRANSLATION = &HC000010C
+    STATUS_CANNOT_IMPERSONATE = &HC000010D
+    STATUS_IMAGE_ALREADY_LOADED = &HC000010E
+    STATUS_ABIOS_NOT_PRESENT = &HC000010F
+    STATUS_ABIOS_LID_NOT_EXIST = &HC0000110
+    STATUS_ABIOS_LID_ALREADY_OWNED = &HC0000111
+    STATUS_ABIOS_NOT_LID_OWNER = &HC0000112
+    STATUS_ABIOS_INVALID_COMMAND = &HC0000113
+    STATUS_ABIOS_INVALID_LID = &HC0000114
+    STATUS_ABIOS_SELECTOR_NOT_AVAILABLE = &HC0000115
+    STATUS_ABIOS_INVALID_SELECTOR = &HC0000116
+    STATUS_NO_LDT = &HC0000117
+    STATUS_INVALID_LDT_SIZE = &HC0000118
+    STATUS_INVALID_LDT_OFFSET = &HC0000119
+    STATUS_INVALID_LDT_DESCRIPTOR = &HC000011A
+    STATUS_INVALID_IMAGE_NE_FORMAT = &HC000011B
+    STATUS_RXACT_INVALID_STATE = &HC000011C
+    STATUS_RXACT_COMMIT_FAILURE = &HC000011D
+    STATUS_MAPPED_FILE_SIZE_ZERO = &HC000011E
+    STATUS_TOO_MANY_OPENED_FILES = &HC000011F
+    STATUS_CANCELLED = &HC0000120
+    STATUS_CANNOT_DELETE = &HC0000121
+    STATUS_INVALID_COMPUTER_NAME = &HC0000122
+    STATUS_FILE_DELETED = &HC0000123
+    STATUS_SPECIAL_ACCOUNT = &HC0000124
+    STATUS_SPECIAL_GROUP = &HC0000125
+    STATUS_SPECIAL_USER = &HC0000126
+    STATUS_MEMBERS_PRIMARY_GROUP = &HC0000127
+    STATUS_FILE_CLOSED = &HC0000128
+    STATUS_TOO_MANY_THREADS = &HC0000129
+    STATUS_THREAD_NOT_IN_PROCESS = &HC000012A
+    STATUS_TOKEN_ALREADY_IN_USE = &HC000012B
+    STATUS_PAGEFILE_QUOTA_EXCEEDED = &HC000012C
+    STATUS_COMMITMENT_LIMIT = &HC000012D
+    STATUS_INVALID_IMAGE_LE_FORMAT = &HC000012E
+    STATUS_INVALID_IMAGE_NOT_MZ = &HC000012F
+    STATUS_INVALID_IMAGE_PROTECT = &HC0000130
+    STATUS_INVALID_IMAGE_WIN_16 = &HC0000131
+    STATUS_LOGON_SERVER_CONFLICT = &HC0000132
+    STATUS_TIME_DIFFERENCE_AT_DC = &HC0000133
+    STATUS_SYNCHRONIZATION_REQUIRED = &HC0000134
+    STATUS_DLL_NOT_FOUND = &HC0000135
+    STATUS_OPEN_FAILED = &HC0000136
+    STATUS_IO_PRIVILEGE_FAILED = &HC0000137
+    STATUS_ORDINAL_NOT_FOUND = &HC0000138
+    STATUS_ENTRYPOINT_NOT_FOUND = &HC0000139
+    STATUS_CONTROL_C_EXIT = &HC000013A
+    STATUS_LOCAL_DISCONNECT = &HC000013B
+    STATUS_REMOTE_DISCONNECT = &HC000013C
+    STATUS_REMOTE_RESOURCES = &HC000013D
+    STATUS_LINK_FAILED = &HC000013E
+    STATUS_LINK_TIMEOUT = &HC000013F
+    STATUS_INVALID_CONNECTION = &HC0000140
+    STATUS_INVALID_ADDRESS = &HC0000141
+    STATUS_DLL_INIT_FAILED = &HC0000142
+    STATUS_MISSING_SYSTEMFILE = &HC0000143
+    STATUS_UNHANDLED_EXCEPTION = &HC0000144
+    STATUS_APP_INIT_FAILURE = &HC0000145
+    STATUS_PAGEFILE_CREATE_FAILED = &HC0000146
+    STATUS_NO_PAGEFILE = &HC0000147
+    STATUS_INVALID_LEVEL = &HC0000148
+    STATUS_WRONG_PASSWORD_CORE = &HC0000149
+    STATUS_ILLEGAL_FLOAT_CONTEXT = &HC000014A
+    STATUS_PIPE_BROKEN = &HC000014B
+    STATUS_REGISTRY_CORRUPT = &HC000014C
+    STATUS_REGISTRY_IO_FAILED = &HC000014D
+    STATUS_NO_EVENT_PAIR = &HC000014E
+    STATUS_UNRECOGNIZED_VOLUME = &HC000014F
+    STATUS_SERIAL_NO_DEVICE_INITED = &HC0000150
+    STATUS_NO_SUCH_ALIAS = &HC0000151
+    STATUS_MEMBER_NOT_IN_ALIAS = &HC0000152
+    STATUS_MEMBER_IN_ALIAS = &HC0000153
+    STATUS_ALIAS_EXISTS = &HC0000154
+    STATUS_LOGON_NOT_GRANTED = &HC0000155
+    STATUS_TOO_MANY_SECRETS = &HC0000156
+    STATUS_SECRET_TOO_LONG = &HC0000157
+    STATUS_INTERNAL_DB_ERROR = &HC0000158
+    STATUS_FULLSCREEN_MODE = &HC0000159
+    STATUS_TOO_MANY_CONTEXT_IDS = &HC000015A
+    STATUS_LOGON_TYPE_NOT_GRANTED = &HC000015B
+    STATUS_NOT_REGISTRY_FILE = &HC000015C
+    STATUS_NT_CROSS_ENCRYPTION_REQUIRED = &HC000015D
+    STATUS_DOMAIN_CTRLR_CONFIG_ERROR = &HC000015E
+    STATUS_FT_MISSING_MEMBER = &HC000015F
+    STATUS_ILL_FORMED_SERVICE_ENTRY = &HC0000160
+    STATUS_ILLEGAL_CHARACTER = &HC0000161
+    STATUS_UNMAPPABLE_CHARACTER = &HC0000162
+    STATUS_UNDEFINED_CHARACTER = &HC0000163
+    STATUS_FLOPPY_VOLUME = &HC0000164
+    STATUS_FLOPPY_ID_MARK_NOT_FOUND = &HC0000165
+    STATUS_FLOPPY_WRONG_CYLINDER = &HC0000166
+    STATUS_FLOPPY_UNKNOWN_ERROR = &HC0000167
+    STATUS_FLOPPY_BAD_REGISTERS = &HC0000168
+    STATUS_DISK_RECALIBRATE_FAILED = &HC0000169
+    STATUS_DISK_OPERATION_FAILED = &HC000016A
+    STATUS_DISK_RESET_FAILED = &HC000016B
+    STATUS_SHARED_IRQ_BUSY = &HC000016C
+    STATUS_FT_ORPHANING = &HC000016D
+    STATUS_BIOS_FAILED_TO_CONNECT_INTERRUPT = &HC000016E
+    STATUS_PARTITION_FAILURE = &HC0000172
+    STATUS_INVALID_BLOCK_LENGTH = &HC0000173
+    STATUS_DEVICE_NOT_PARTITIONED = &HC0000174
+    STATUS_UNABLE_TO_LOCK_MEDIA = &HC0000175
+    STATUS_UNABLE_TO_UNLOAD_MEDIA = &HC0000176
+    STATUS_EOM_OVERFLOW = &HC0000177
+    STATUS_NO_MEDIA = &HC0000178
+    STATUS_NO_SUCH_MEMBER = &HC000017A
+    STATUS_INVALID_MEMBER = &HC000017B
+    STATUS_KEY_DELETED = &HC000017C
+    STATUS_NO_LOG_SPACE = &HC000017D
+    STATUS_TOO_MANY_SIDS = &HC000017E
+    STATUS_LM_CROSS_ENCRYPTION_REQUIRED = &HC000017F
+    STATUS_KEY_HAS_CHILDREN = &HC0000180
+    STATUS_CHILD_MUST_BE_VOLATILE = &HC0000181
+    STATUS_DEVICE_CONFIGURATION_ERROR = &HC0000182
+    STATUS_DRIVER_INTERNAL_ERROR = &HC0000183
+    STATUS_INVALID_DEVICE_STATE = &HC0000184
+    STATUS_IO_DEVICE_ERROR = &HC0000185
+    STATUS_DEVICE_PROTOCOL_ERROR = &HC0000186
+    STATUS_BACKUP_CONTROLLER = &HC0000187
+    STATUS_LOG_FILE_FULL = &HC0000188
+    STATUS_TOO_LATE = &HC0000189
+    STATUS_NO_TRUST_LSA_SECRET = &HC000018A
+    STATUS_NO_TRUST_SAM_ACCOUNT = &HC000018B
+    STATUS_TRUSTED_DOMAIN_FAILURE = &HC000018C
+    STATUS_TRUSTED_RELATIONSHIP_FAILURE = &HC000018D
+    STATUS_EVENTLOG_FILE_CORRUPT = &HC000018E
+    STATUS_EVENTLOG_CANT_START = &HC000018F
+    STATUS_TRUST_FAILURE = &HC0000190
+    STATUS_MUTANT_LIMIT_EXCEEDED = &HC0000191
+    STATUS_NETLOGON_NOT_STARTED = &HC0000192
+    STATUS_ACCOUNT_EXPIRED = &HC0000193
+    STATUS_POSSIBLE_DEADLOCK = &HC0000194
+    STATUS_NETWORK_CREDENTIAL_CONFLICT = &HC0000195
+    STATUS_REMOTE_SESSION_LIMIT = &HC0000196
+    STATUS_EVENTLOG_FILE_CHANGED = &HC0000197
+    STATUS_NOLOGON_INTERDOMAIN_TRUST_ACCOUNT = &HC0000198
+    STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT = &HC0000199
+    STATUS_NOLOGON_SERVER_TRUST_ACCOUNT = &HC000019A
+    STATUS_DOMAIN_TRUST_INCONSISTENT = &HC000019B
+    STATUS_FS_DRIVER_REQUIRED = &HC000019C
+    STATUS_NO_USER_SESSION_KEY = &HC0000202
+    STATUS_USER_SESSION_DELETED = &HC0000203
+    STATUS_RESOURCE_LANG_NOT_FOUND = &HC0000204
+    STATUS_INSUFF_SERVER_RESOURCES = &HC0000205
+    STATUS_INVALID_BUFFER_SIZE = &HC0000206
+    STATUS_INVALID_ADDRESS_COMPONENT = &HC0000207
+    STATUS_INVALID_ADDRESS_WILDCARD = &HC0000208
+    STATUS_TOO_MANY_ADDRESSES = &HC0000209
+    STATUS_ADDRESS_ALREADY_EXISTS = &HC000020A
+    STATUS_ADDRESS_CLOSED = &HC000020B
+    STATUS_CONNECTION_DISCONNECTED = &HC000020C
+    STATUS_CONNECTION_RESET = &HC000020D
+    STATUS_TOO_MANY_NODES = &HC000020E
+    STATUS_TRANSACTION_ABORTED = &HC000020F
+    STATUS_TRANSACTION_TIMED_OUT = &HC0000210
+    STATUS_TRANSACTION_NO_RELEASE = &HC0000211
+    STATUS_TRANSACTION_NO_MATCH = &HC0000212
+    STATUS_TRANSACTION_RESPONDED = &HC0000213
+    STATUS_TRANSACTION_INVALID_ID = &HC0000214
+    STATUS_TRANSACTION_INVALID_TYPE = &HC0000215
+    STATUS_NOT_SERVER_SESSION = &HC0000216
+    STATUS_NOT_CLIENT_SESSION = &HC0000217
+    STATUS_CANNOT_LOAD_REGISTRY_FILE = &HC0000218
+    STATUS_DEBUG_ATTACH_FAILED = &HC0000219
+    STATUS_SYSTEM_PROCESS_TERMINATED = &HC000021A
+    STATUS_DATA_NOT_ACCEPTED = &HC000021B
+    STATUS_NO_BROWSER_SERVERS_FOUND = &HC000021C
+    STATUS_VDM_HARD_ERROR = &HC000021D
+    STATUS_DRIVER_CANCEL_TIMEOUT = &HC000021E
+    STATUS_REPLY_MESSAGE_MISMATCH = &HC000021F
+    STATUS_MAPPED_ALIGNMENT = &HC0000220
+    STATUS_IMAGE_CHECKSUM_MISMATCH = &HC0000221
+    STATUS_LOST_WRITEBEHIND_DATA = &HC0000222
+    STATUS_CLIENT_SERVER_PARAMETERS_INVALID = &HC0000223
+    STATUS_PASSWORD_MUST_CHANGE = &HC0000224
+    STATUS_NOT_FOUND = &HC0000225
+    STATUS_NOT_TINY_STREAM = &HC0000226
+    STATUS_RECOVERY_FAILURE = &HC0000227
+    STATUS_STACK_OVERFLOW_READ = &HC0000228
+    STATUS_FAIL_CHECK = &HC0000229
+    STATUS_DUPLICATE_OBJECTID = &HC000022A
+    STATUS_OBJECTID_EXISTS = &HC000022B
+    STATUS_CONVERT_TO_LARGE = &HC000022C
+    STATUS_RETRY = &HC000022D
+    STATUS_FOUND_OUT_OF_SCOPE = &HC000022E
+    STATUS_ALLOCATE_BUCKET = &HC000022F
+    STATUS_PROPSET_NOT_FOUND = &HC0000230
+    STATUS_MARSHALL_OVERFLOW = &HC0000231
+    STATUS_INVALID_VARIANT = &HC0000232
+    STATUS_DOMAIN_CONTROLLER_NOT_FOUND = &HC0000233
+    STATUS_ACCOUNT_LOCKED_OUT = &HC0000234
+    STATUS_HANDLE_NOT_CLOSABLE = &HC0000235
+    STATUS_CONNECTION_REFUSED = &HC0000236
+    STATUS_GRACEFUL_DISCONNECT = &HC0000237
+    STATUS_ADDRESS_ALREADY_ASSOCIATED = &HC0000238
+    STATUS_ADDRESS_NOT_ASSOCIATED = &HC0000239
+    STATUS_CONNECTION_INVALID = &HC000023A
+    STATUS_CONNECTION_ACTIVE = &HC000023B
+    STATUS_NETWORK_UNREACHABLE = &HC000023C
+    STATUS_HOST_UNREACHABLE = &HC000023D
+    STATUS_PROTOCOL_UNREACHABLE = &HC000023E
+    STATUS_PORT_UNREACHABLE = &HC000023F
+    STATUS_REQUEST_ABORTED = &HC0000240
+    STATUS_CONNECTION_ABORTED = &HC0000241
+    STATUS_BAD_COMPRESSION_BUFFER = &HC0000242
+    STATUS_USER_MAPPED_FILE = &HC0000243
+    STATUS_AUDIT_FAILED = &HC0000244
+    STATUS_TIMER_RESOLUTION_NOT_SET = &HC0000245
+    STATUS_CONNECTION_COUNT_LIMIT = &HC0000246
+    STATUS_LOGIN_TIME_RESTRICTION = &HC0000247
+    STATUS_LOGIN_WKSTA_RESTRICTION = &HC0000248
+    STATUS_IMAGE_MP_UP_MISMATCH = &HC0000249
+    STATUS_INSUFFICIENT_LOGON_INFO = &HC0000250
+    STATUS_BAD_DLL_ENTRYPOINT = &HC0000251
+    STATUS_BAD_SERVICE_ENTRYPOINT = &HC0000252
+    STATUS_LPC_REPLY_LOST = &HC0000253
+    STATUS_IP_ADDRESS_CONFLICT1 = &HC0000254
+    STATUS_IP_ADDRESS_CONFLICT2 = &HC0000255
+    STATUS_REGISTRY_QUOTA_LIMIT = &HC0000256
+    STATUS_PATH_NOT_COVERED = &HC0000257
+    STATUS_NO_CALLBACK_ACTIVE = &HC0000258
+    STATUS_LICENSE_QUOTA_EXCEEDED = &HC0000259
+    STATUS_PWD_TOO_SHORT = &HC000025A
+    STATUS_PWD_TOO_RECENT = &HC000025B
+    STATUS_PWD_HISTORY_CONFLICT = &HC000025C
+    STATUS_PLUGPLAY_NO_DEVICE = &HC000025E
+    STATUS_UNSUPPORTED_COMPRESSION = &HC000025F
+    STATUS_INVALID_HW_PROFILE = &HC0000260
+    STATUS_INVALID_PLUGPLAY_DEVICE_PATH = &HC0000261
+    STATUS_DRIVER_ORDINAL_NOT_FOUND = &HC0000262
+    STATUS_DRIVER_ENTRYPOINT_NOT_FOUND = &HC0000263
+    STATUS_RESOURCE_NOT_OWNED = &HC0000264
+    STATUS_TOO_MANY_LINKS = &HC0000265
+    STATUS_QUOTA_LIST_INCONSISTENT = &HC0000266
+    STATUS_FILE_IS_OFFLINE = &HC0000267
+    STATUS_EVALUATION_EXPIRATION = &HC0000268
+    STATUS_ILLEGAL_DLL_RELOCATION = &HC0000269
+    STATUS_LICENSE_VIOLATION = &HC000026A
+    STATUS_DLL_INIT_FAILED_LOGOFF = &HC000026B
+    STATUS_DRIVER_UNABLE_TO_LOAD = &HC000026C
+    STATUS_DFS_UNAVAILABLE = &HC000026D
+    STATUS_VOLUME_DISMOUNTED = &HC000026E
+    STATUS_WX86_INTERNAL_ERROR = &HC000026F
+    STATUS_WX86_FLOAT_STACK_CHECK = &HC0000270
+    STATUS_VALIDATE_CONTINUE = &HC0000271
+    STATUS_NO_MATCH = &HC0000272
+    STATUS_NO_MORE_MATCHES = &HC0000273
+    STATUS_NOT_A_REPARSE_POINT = &HC0000275
+    STATUS_IO_REPARSE_TAG_INVALID = &HC0000276
+    STATUS_IO_REPARSE_TAG_MISMATCH = &HC0000277
+    STATUS_IO_REPARSE_DATA_INVALID = &HC0000278
+    STATUS_IO_REPARSE_TAG_NOT_HANDLED = &HC0000279
+    STATUS_REPARSE_POINT_NOT_RESOLVED = &HC0000280
+    STATUS_DIRECTORY_IS_A_REPARSE_POINT = &HC0000281
+    STATUS_RANGE_LIST_CONFLICT = &HC0000282
+    STATUS_SOURCE_ELEMENT_EMPTY = &HC0000283
+    STATUS_DESTINATION_ELEMENT_FULL = &HC0000284
+    STATUS_ILLEGAL_ELEMENT_ADDRESS = &HC0000285
+    STATUS_MAGAZINE_NOT_PRESENT = &HC0000286
+    STATUS_REINITIALIZATION_NEEDED = &HC0000287
+    STATUS_DEVICE_REQUIRES_CLEANING = &H80000288
+    STATUS_DEVICE_DOOR_OPEN = &H80000289
+    STATUS_ENCRYPTION_FAILED = &HC000028A
+    STATUS_DECRYPTION_FAILED = &HC000028B
+    STATUS_RANGE_NOT_FOUND = &HC000028C
+    STATUS_NO_RECOVERY_POLICY = &HC000028D
+    STATUS_NO_EFS = &HC000028E
+    STATUS_WRONG_EFS = &HC000028F
+    STATUS_NO_USER_KEYS = &HC0000290
+    STATUS_FILE_NOT_ENCRYPTED = &HC0000291
+    STATUS_NOT_EXPORT_FORMAT = &HC0000292
+    STATUS_FILE_ENCRYPTED = &HC0000293
+    STATUS_WAKE_SYSTEM = &H40000294
+    STATUS_WMI_GUID_NOT_FOUND = &HC0000295
+    STATUS_WMI_INSTANCE_NOT_FOUND = &HC0000296
+    STATUS_WMI_ITEMID_NOT_FOUND = &HC0000297
+    STATUS_WMI_TRY_AGAIN = &HC0000298
+    STATUS_SHARED_POLICY = &HC0000299
+    STATUS_POLICY_OBJECT_NOT_FOUND = &HC000029A
+    STATUS_POLICY_ONLY_IN_DS = &HC000029B
+    STATUS_VOLUME_NOT_UPGRADED = &HC000029C
+    STATUS_REMOTE_STORAGE_NOT_ACTIVE = &HC000029D
+    STATUS_REMOTE_STORAGE_MEDIA_ERROR = &HC000029E
+    STATUS_NO_TRACKING_SERVICE = &HC000029F
+    STATUS_SERVER_SID_MISMATCH = &HC00002A0
+    STATUS_DS_NO_ATTRIBUTE_OR_VALUE = &HC00002A1
+    STATUS_DS_INVALID_ATTRIBUTE_SYNTAX = &HC00002A2
+    STATUS_DS_ATTRIBUTE_TYPE_UNDEFINED = &HC00002A3
+    STATUS_DS_ATTRIBUTE_OR_VALUE_EXISTS = &HC00002A4
+    STATUS_DS_BUSY = &HC00002A5
+    STATUS_DS_UNAVAILABLE = &HC00002A6
+    STATUS_DS_NO_RIDS_ALLOCATED = &HC00002A7
+    STATUS_DS_NO_MORE_RIDS = &HC00002A8
+    STATUS_DS_INCORRECT_ROLE_OWNER = &HC00002A9
+    STATUS_DS_RIDMGR_INIT_ERROR = &HC00002AA
+    STATUS_DS_OBJ_CLASS_VIOLATION = &HC00002AB
+    STATUS_DS_CANT_ON_NON_LEAF = &HC00002AC
+    STATUS_DS_CANT_ON_RDN = &HC00002AD
+    STATUS_DS_CANT_MOD_OBJ_CLASS = &HC00002AE
+    STATUS_DS_CROSS_DOM_MOVE_FAILED = &HC00002AF
+    STATUS_DS_GC_NOT_AVAILABLE = &HC00002B0
+    STATUS_DIRECTORY_SERVICE_REQUIRED = &HC00002B1
+    STATUS_REPARSE_ATTRIBUTE_CONFLICT = &HC00002B2
+    STATUS_CANT_ENABLE_DENY_ONLY = &HC00002B3
+    STATUS_FLOAT_MULTIPLE_FAULTS = &HC00002B4
+    STATUS_FLOAT_MULTIPLE_TRAPS = &HC00002B5
+    STATUS_DEVICE_REMOVED = &HC00002B6
+    STATUS_JOURNAL_DELETE_IN_PROGRESS = &HC00002B7
+    STATUS_JOURNAL_NOT_ACTIVE = &HC00002B8
+    STATUS_NOINTERFACE = &HC00002B9
+    STATUS_DS_ADMIN_LIMIT_EXCEEDED = &HC00002C1
+    STATUS_DRIVER_FAILED_SLEEP = &HC00002C2
+    STATUS_MUTUAL_AUTHENTICATION_FAILED = &HC00002C3
+    STATUS_CORRUPT_SYSTEM_FILE = &HC00002C4
+    STATUS_DATATYPE_MISALIGNMENT_ERROR = &HC00002C5
+    STATUS_WMI_READ_ONLY = &HC00002C6
+    STATUS_WMI_SET_FAILURE = &HC00002C7
+    STATUS_COMMITMENT_MINIMUM = &HC00002C8
+    STATUS_REG_NAT_CONSUMPTION = &HC00002C9
+    STATUS_TRANSPORT_FULL = &HC00002CA
+    STATUS_DS_SAM_INIT_FAILURE = &HC00002CB
+    STATUS_ONLY_IF_CONNECTED = &HC00002CC
+    STATUS_DS_SENSITIVE_GROUP_VIOLATION = &HC00002CD
+    STATUS_PNP_RESTART_ENUMERATION = &HC00002CE
+    STATUS_JOURNAL_ENTRY_DELETED = &HC00002CF
+    STATUS_DS_CANT_MOD_PRIMARYGROUPID = &HC00002D0
+    STATUS_SYSTEM_IMAGE_BAD_SIGNATURE = &HC00002D1
+    STATUS_PNP_REBOOT_REQUIRED = &HC00002D2
+    STATUS_POWER_STATE_INVALID = &HC00002D3
+    STATUS_DS_INVALID_GROUP_TYPE = &HC00002D4
+    STATUS_DS_NO_NEST_GLOBALGROUP_IN_MIXEDDOMAIN = &HC00002D5
+    STATUS_DS_NO_NEST_LOCALGROUP_IN_MIXEDDOMAIN = &HC00002D6
+    STATUS_DS_GLOBAL_CANT_HAVE_LOCAL_MEMBER = &HC00002D7
+    STATUS_DS_GLOBAL_CANT_HAVE_UNIVERSAL_MEMBER = &HC00002D8
+    STATUS_DS_UNIVERSAL_CANT_HAVE_LOCAL_MEMBER = &HC00002D9
+    STATUS_DS_GLOBAL_CANT_HAVE_CROSSDOMAIN_MEMBER = &HC00002DA
+    STATUS_DS_LOCAL_CANT_HAVE_CROSSDOMAIN_LOCAL_MEMBER = &HC00002DB
+    STATUS_DS_HAVE_PRIMARY_MEMBERS = &HC00002DC
+    STATUS_WMI_NOT_SUPPORTED = &HC00002DD
+    STATUS_INSUFFICIENT_POWER = &HC00002DE
+    STATUS_SAM_NEED_BOOTKEY_PASSWORD = &HC00002DF
+    STATUS_SAM_NEED_BOOTKEY_FLOPPY = &HC00002E0
+    STATUS_DS_CANT_START = &HC00002E1
+    STATUS_DS_INIT_FAILURE = &HC00002E2
+    STATUS_SAM_INIT_FAILURE = &HC00002E3
+    STATUS_DS_GC_REQUIRED = &HC00002E4
+    STATUS_DS_LOCAL_MEMBER_OF_LOCAL_ONLY = &HC00002E5
+    STATUS_DS_NO_FPO_IN_UNIVERSAL_GROUPS = &HC00002E6
+    STATUS_DS_MACHINE_ACCOUNT_QUOTA_EXCEEDED = &HC00002E7
+    STATUS_MULTIPLE_FAULT_VIOLATION = &HC00002E8
+    STATUS_CURRENT_DOMAIN_NOT_ALLOWED = &HC00002E9
+    STATUS_CANNOT_MAKE = &HC00002EA
+    STATUS_SYSTEM_SHUTDOWN = &HC00002EB
+    STATUS_DS_INIT_FAILURE_CONSOLE = &HC00002EC
+    STATUS_DS_SAM_INIT_FAILURE_CONSOLE = &HC00002ED
+    STATUS_UNFINISHED_CONTEXT_DELETED = &HC00002EE
+    STATUS_NO_TGT_REPLY = &HC00002EF
+    STATUS_OBJECTID_NOT_FOUND = &HC00002F0
+    STATUS_NO_IP_ADDRESSES = &HC00002F1
+    STATUS_WRONG_CREDENTIAL_HANDLE = &HC00002F2
+    STATUS_CRYPTO_SYSTEM_INVALID = &HC00002F3
+    STATUS_MAX_REFERRALS_EXCEEDED = &HC00002F4
+    STATUS_MUST_BE_KDC = &HC00002F5
+    STATUS_STRONG_CRYPTO_NOT_SUPPORTED = &HC00002F6
+    STATUS_TOO_MANY_PRINCIPALS = &HC00002F7
+    STATUS_NO_PA_DATA = &HC00002F8
+    STATUS_PKINIT_NAME_MISMATCH = &HC00002F9
+    STATUS_SMARTCARD_LOGON_REQUIRED = &HC00002FA
+    STATUS_KDC_INVALID_REQUEST = &HC00002FB
+    STATUS_KDC_UNABLE_TO_REFER = &HC00002FC
+    STATUS_KDC_UNKNOWN_ETYPE = &HC00002FD
+    STATUS_SHUTDOWN_IN_PROGRESS = &HC00002FE
+    STATUS_SERVER_SHUTDOWN_IN_PROGRESS = &HC00002FF
+    STATUS_NOT_SUPPORTED_ON_SBS = &HC0000300
+    STATUS_WMI_GUID_DISCONNECTED = &HC0000301
+    STATUS_WMI_ALREADY_DISABLED = &HC0000302
+    STATUS_WMI_ALREADY_ENABLED = &HC0000303
+    STATUS_MFT_TOO_FRAGMENTED = &HC0000304
+    STATUS_COPY_PROTECTION_FAILURE = &HC0000305
+    STATUS_CSS_AUTHENTICATION_FAILURE = &HC0000306
+    STATUS_CSS_KEY_NOT_PRESENT = &HC0000307
+    STATUS_CSS_KEY_NOT_ESTABLISHED = &HC0000308
+    STATUS_CSS_SCRAMBLED_SECTOR = &HC0000309
+    STATUS_CSS_REGION_MISMATCH = &HC000030A
+    STATUS_CSS_RESETS_EXHAUSTED = &HC000030B
+    STATUS_PKINIT_FAILURE = &HC0000320
+    STATUS_SMARTCARD_SUBSYSTEM_FAILURE = &HC0000321
+    STATUS_NO_KERB_KEY = &HC0000322
+    STATUS_HOST_DOWN = &HC0000350
+    STATUS_UNSUPPORTED_PREAUTH = &HC0000351
+    STATUS_EFS_ALG_BLOB_TOO_BIG = &HC0000352
+    STATUS_PORT_NOT_SET = &HC0000353
+    STATUS_DEBUGGER_INACTIVE = &HC0000354
+    STATUS_DS_VERSION_CHECK_FAILURE = &HC0000355
+    STATUS_AUDITING_DISABLED = &HC0000356
+    STATUS_PRENT4_MACHINE_ACCOUNT = &HC0000357
+    STATUS_DS_AG_CANT_HAVE_UNIVERSAL_MEMBER = &HC0000358
+    STATUS_INVALID_IMAGE_WIN_32 = &HC0000359
+    STATUS_INVALID_IMAGE_WIN_64 = &HC000035A
+    STATUS_BAD_BINDINGS = &HC000035B
+    STATUS_NETWORK_SESSION_EXPIRED = &HC000035C
+    STATUS_APPHELP_BLOCK = &HC000035D
+    STATUS_ALL_SIDS_FILTERED = &HC000035E
+    STATUS_NOT_SAFE_MODE_DRIVER = &HC000035F
+    STATUS_ACCESS_DISABLED_BY_POLICY_DEFAULT = &HC0000361
+    STATUS_ACCESS_DISABLED_BY_POLICY_PATH = &HC0000362
+    STATUS_ACCESS_DISABLED_BY_POLICY_PUBLISHER = &HC0000363
+    STATUS_ACCESS_DISABLED_BY_POLICY_OTHER = &HC0000364
+    STATUS_FAILED_DRIVER_ENTRY = &HC0000365
+    STATUS_DEVICE_ENUMERATION_ERROR = &HC0000366
+    STATUS_WAIT_FOR_OPLOCK = &H00000367
+    STATUS_MOUNT_POINT_NOT_RESOLVED = &HC0000368
+    STATUS_INVALID_DEVICE_OBJECT_PARAMETER = &HC0000369
+    STATUS_MCA_OCCURED = &HC000036A
+    STATUS_DRIVER_BLOCKED_CRITICAL = &HC000036B
+    STATUS_DRIVER_BLOCKED = &HC000036C
+    STATUS_DRIVER_DATABASE_ERROR = &HC000036D
+    STATUS_SYSTEM_HIVE_TOO_LARGE = &HC000036E
+    STATUS_INVALID_IMPORT_OF_NON_DLL = &HC000036F
+    STATUS_DS_SHUTTING_DOWN = &H40000370
+    STATUS_SMARTCARD_WRONG_PIN = &HC0000380
+    STATUS_SMARTCARD_CARD_BLOCKED = &HC0000381
+    STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED = &HC0000382
+    STATUS_SMARTCARD_NO_CARD = &HC0000383
+    STATUS_SMARTCARD_NO_KEY_CONTAINER = &HC0000384
+    STATUS_SMARTCARD_NO_CERTIFICATE = &HC0000385
+    STATUS_SMARTCARD_NO_KEYSET = &HC0000386
+    STATUS_SMARTCARD_IO_ERROR = &HC0000387
+    STATUS_DOWNGRADE_DETECTED = &HC0000388
+    STATUS_SMARTCARD_CERT_REVOKED = &HC0000389
+    STATUS_ISSUING_CA_UNTRUSTED = &HC000038A
+    STATUS_REVOCATION_OFFLINE_C = &HC000038B
+    STATUS_PKINIT_CLIENT_FAILURE = &HC000038C
+    STATUS_SMARTCARD_CERT_EXPIRED = &HC000038D
+    STATUS_DRIVER_FAILED_PRIOR_UNLOAD = &HC000038E
+    STATUS_SMARTCARD_SILENT_CONTEXT = &HC000038F
+    STATUS_PER_USER_TRUST_QUOTA_EXCEEDED = &HC0000401
+    STATUS_ALL_USER_TRUST_QUOTA_EXCEEDED = &HC0000402
+    STATUS_USER_DELETE_TRUST_QUOTA_EXCEEDED = &HC0000403
+    STATUS_DS_NAME_NOT_UNIQUE = &HC0000404
+    STATUS_DS_DUPLICATE_ID_FOUND = &HC0000405
+    STATUS_DS_GROUP_CONVERSION_ERROR = &HC0000406
+    STATUS_VOLSNAP_PREPARE_HIBERNATE = &HC0000407
+    STATUS_USER2USER_REQUIRED = &HC0000408
+    STATUS_STACK_BUFFER_OVERRUN = &HC0000409
+    STATUS_NO_S4U_PROT_SUPPORT = &HC000040A
+    STATUS_CROSSREALM_DELEGATION_FAILURE = &HC000040B
+    STATUS_REVOCATION_OFFLINE_KDC = &HC000040C
+    STATUS_ISSUING_CA_UNTRUSTED_KDC = &HC000040D
+    STATUS_KDC_CERT_EXPIRED = &HC000040E
+    STATUS_KDC_CERT_REVOKED = &HC000040F
+    STATUS_PARAMETER_QUOTA_EXCEEDED = &HC0000410
+    STATUS_HIBERNATION_FAILURE = &HC0000411
+    STATUS_DELAY_LOAD_FAILED = &HC0000412
+    STATUS_AUTHENTICATION_FIREWALL_FAILED = &HC0000413
+    STATUS_VDM_DISALLOWED = &HC0000414
+    STATUS_HUNG_DISPLAY_DRIVER_THREAD = &HC0000415
+    STATUS_ASSERTION_FAILURE = &HC0000420
+    STATUS_CALLBACK_POP_STACK = &HC0000423
+    STATUS_INCOMPATIBLE_DRIVER_BLOCKED = &HC0000424
+    STATUS_ENCOUNTERED_WRITE_IN_PROGRESS = &HC0000433
+    STATUS_WOW_ASSERTION = &HC0009898
+    DBG_NO_STATE_CHANGE = &HC0010001
+    DBG_APP_NOT_IDLE = &HC0010002
+    RPC_NT_INVALID_STRING_BINDING = &HC0020001
+    RPC_NT_WRONG_KIND_OF_BINDING = &HC0020002
+    RPC_NT_INVALID_BINDING = &HC0020003
+    RPC_NT_PROTSEQ_NOT_SUPPORTED = &HC0020004
+    RPC_NT_INVALID_RPC_PROTSEQ = &HC0020005
+    RPC_NT_INVALID_STRING_UUID = &HC0020006
+    RPC_NT_INVALID_ENDPOINT_FORMAT = &HC0020007
+    RPC_NT_INVALID_NET_ADDR = &HC0020008
+    RPC_NT_NO_ENDPOINT_FOUND = &HC0020009
+    RPC_NT_INVALID_TIMEOUT = &HC002000A
+    RPC_NT_OBJECT_NOT_FOUND = &HC002000B
+    RPC_NT_ALREADY_REGISTERED = &HC002000C
+    RPC_NT_TYPE_ALREADY_REGISTERED = &HC002000D
+    RPC_NT_ALREADY_LISTENING = &HC002000E
+    RPC_NT_NO_PROTSEQS_REGISTERED = &HC002000F
+    RPC_NT_NOT_LISTENING = &HC0020010
+    RPC_NT_UNKNOWN_MGR_TYPE = &HC0020011
+    RPC_NT_UNKNOWN_IF = &HC0020012
+    RPC_NT_NO_BINDINGS = &HC0020013
+    RPC_NT_NO_PROTSEQS = &HC0020014
+    RPC_NT_CANT_CREATE_ENDPOINT = &HC0020015
+    RPC_NT_OUT_OF_RESOURCES = &HC0020016
+    RPC_NT_SERVER_UNAVAILABLE = &HC0020017
+    RPC_NT_SERVER_TOO_BUSY = &HC0020018
+    RPC_NT_INVALID_NETWORK_OPTIONS = &HC0020019
+    RPC_NT_NO_CALL_ACTIVE = &HC002001A
+    RPC_NT_CALL_FAILED = &HC002001B
+    RPC_NT_CALL_FAILED_DNE = &HC002001C
+    RPC_NT_PROTOCOL_ERROR = &HC002001D
+    RPC_NT_UNSUPPORTED_TRANS_SYN = &HC002001F
+    RPC_NT_UNSUPPORTED_TYPE = &HC0020021
+    RPC_NT_INVALID_TAG = &HC0020022
+    RPC_NT_INVALID_BOUND = &HC0020023
+    RPC_NT_NO_ENTRY_NAME = &HC0020024
+    RPC_NT_INVALID_NAME_SYNTAX = &HC0020025
+    RPC_NT_UNSUPPORTED_NAME_SYNTAX = &HC0020026
+    RPC_NT_UUID_NO_ADDRESS = &HC0020028
+    RPC_NT_DUPLICATE_ENDPOINT = &HC0020029
+    RPC_NT_UNKNOWN_AUTHN_TYPE = &HC002002A
+    RPC_NT_MAX_CALLS_TOO_SMALL = &HC002002B
+    RPC_NT_STRING_TOO_LONG = &HC002002C
+    RPC_NT_PROTSEQ_NOT_FOUND = &HC002002D
+    RPC_NT_PROCNUM_OUT_OF_RANGE = &HC002002E
+    RPC_NT_BINDING_HAS_NO_AUTH = &HC002002F
+    RPC_NT_UNKNOWN_AUTHN_SERVICE = &HC0020030
+    RPC_NT_UNKNOWN_AUTHN_LEVEL = &HC0020031
+    RPC_NT_INVALID_AUTH_IDENTITY = &HC0020032
+    RPC_NT_UNKNOWN_AUTHZ_SERVICE = &HC0020033
+    EPT_NT_INVALID_ENTRY = &HC0020034
+    EPT_NT_CANT_PERFORM_OP = &HC0020035
+    EPT_NT_NOT_REGISTERED = &HC0020036
+    RPC_NT_NOTHING_TO_EXPORT = &HC0020037
+    RPC_NT_INCOMPLETE_NAME = &HC0020038
+    RPC_NT_INVALID_VERS_OPTION = &HC0020039
+    RPC_NT_NO_MORE_MEMBERS = &HC002003A
+    RPC_NT_NOT_ALL_OBJS_UNEXPORTED = &HC002003B
+    RPC_NT_INTERFACE_NOT_FOUND = &HC002003C
+    RPC_NT_ENTRY_ALREADY_EXISTS = &HC002003D
+    RPC_NT_ENTRY_NOT_FOUND = &HC002003E
+    RPC_NT_NAME_SERVICE_UNAVAILABLE = &HC002003F
+    RPC_NT_INVALID_NAF_ID = &HC0020040
+    RPC_NT_CANNOT_SUPPORT = &HC0020041
+    RPC_NT_NO_CONTEXT_AVAILABLE = &HC0020042
+    RPC_NT_INTERNAL_ERROR = &HC0020043
+    RPC_NT_ZERO_DIVIDE = &HC0020044
+    RPC_NT_ADDRESS_ERROR = &HC0020045
+    RPC_NT_FP_DIV_ZERO = &HC0020046
+    RPC_NT_FP_UNDERFLOW = &HC0020047
+    RPC_NT_FP_OVERFLOW = &HC0020048
+    RPC_NT_NO_MORE_ENTRIES = &HC0030001
+    RPC_NT_SS_CHAR_TRANS_OPEN_FAIL = &HC0030002
+    RPC_NT_SS_CHAR_TRANS_SHORT_FILE = &HC0030003
+    RPC_NT_SS_IN_NULL_CONTEXT = &HC0030004
+    RPC_NT_SS_CONTEXT_MISMATCH = &HC0030005
+    RPC_NT_SS_CONTEXT_DAMAGED = &HC0030006
+    RPC_NT_SS_HANDLES_MISMATCH = &HC0030007
+    RPC_NT_SS_CANNOT_GET_CALL_HANDLE = &HC0030008
+    RPC_NT_NULL_REF_POINTER = &HC0030009
+    RPC_NT_ENUM_VALUE_OUT_OF_RANGE = &HC003000A
+    RPC_NT_BYTE_COUNT_TOO_SMALL = &HC003000B
+    RPC_NT_BAD_STUB_DATA = &HC003000C
+    RPC_NT_CALL_IN_PROGRESS = &HC0020049
+    RPC_NT_NO_MORE_BINDINGS = &HC002004A
+    RPC_NT_GROUP_MEMBER_NOT_FOUND = &HC002004B
+    EPT_NT_CANT_CREATE = &HC002004C
+    RPC_NT_INVALID_OBJECT = &HC002004D
+    RPC_NT_NO_INTERFACES = &HC002004F
+    RPC_NT_CALL_CANCELLED = &HC0020050
+    RPC_NT_BINDING_INCOMPLETE = &HC0020051
+    RPC_NT_COMM_FAILURE = &HC0020052
+    RPC_NT_UNSUPPORTED_AUTHN_LEVEL = &HC0020053
+    RPC_NT_NO_PRINC_NAME = &HC0020054
+    RPC_NT_NOT_RPC_ERROR = &HC0020055
+    RPC_NT_UUID_LOCAL_ONLY = &H40020056
+    RPC_NT_SEC_PKG_ERROR = &HC0020057
+    RPC_NT_NOT_CANCELLED = &HC0020058
+    RPC_NT_INVALID_ES_ACTION = &HC0030059
+    RPC_NT_WRONG_ES_VERSION = &HC003005A
+    RPC_NT_WRONG_STUB_VERSION = &HC003005B
+    RPC_NT_INVALID_PIPE_OBJECT = &HC003005C
+    RPC_NT_INVALID_PIPE_OPERATION = &HC003005D
+    RPC_NT_WRONG_PIPE_VERSION = &HC003005E
+    RPC_NT_PIPE_CLOSED = &HC003005F
+    RPC_NT_PIPE_DISCIPLINE_ERROR = &HC0030060
+    RPC_NT_PIPE_EMPTY = &HC0030061
+    RPC_NT_INVALID_ASYNC_HANDLE = &HC0020062
+    RPC_NT_INVALID_ASYNC_CALL = &HC0020063
+    RPC_NT_SEND_INCOMPLETE = &H400200AF
+    STATUS_ACPI_INVALID_OPCODE = &HC0140001
+    STATUS_ACPI_STACK_OVERFLOW = &HC0140002
+    STATUS_ACPI_ASSERT_FAILED = &HC0140003
+    STATUS_ACPI_INVALID_INDEX = &HC0140004
+    STATUS_ACPI_INVALID_ARGUMENT = &HC0140005
+    STATUS_ACPI_FATAL = &HC0140006
+    STATUS_ACPI_INVALID_SUPERNAME = &HC0140007
+    STATUS_ACPI_INVALID_ARGTYPE = &HC0140008
+    STATUS_ACPI_INVALID_OBJTYPE = &HC0140009
+    STATUS_ACPI_INVALID_TARGETTYPE = &HC014000A
+    STATUS_ACPI_INCORRECT_ARGUMENT_COUNT = &HC014000B
+    STATUS_ACPI_ADDRESS_NOT_MAPPED = &HC014000C
+    STATUS_ACPI_INVALID_EVENTTYPE = &HC014000D
+    STATUS_ACPI_HANDLER_COLLISION = &HC014000E
+    STATUS_ACPI_INVALID_DATA = &HC014000F
+    STATUS_ACPI_INVALID_REGION = &HC0140010
+    STATUS_ACPI_INVALID_ACCESS_SIZE = &HC0140011
+    STATUS_ACPI_ACQUIRE_GLOBAL_LOCK = &HC0140012
+    STATUS_ACPI_ALREADY_INITIALIZED = &HC0140013
+    STATUS_ACPI_NOT_INITIALIZED = &HC0140014
+    STATUS_ACPI_INVALID_MUTEX_LEVEL = &HC0140015
+    STATUS_ACPI_MUTEX_NOT_OWNED = &HC0140016
+    STATUS_ACPI_MUTEX_NOT_OWNER = &HC0140017
+    STATUS_ACPI_RS_ACCESS = &HC0140018
+    STATUS_ACPI_INVALID_TABLE = &HC0140019
+    STATUS_ACPI_REG_HANDLER_FAILED = &HC0140020
+    STATUS_ACPI_POWER_REQUEST_FAILED = &HC0140021
+    STATUS_CTX_WINSTATION_NAME_INVALID = &HC00A0001
+    STATUS_CTX_INVALID_PD = &HC00A0002
+    STATUS_CTX_PD_NOT_FOUND = &HC00A0003
+    STATUS_CTX_CDM_CONNECT = &H400A0004
+    STATUS_CTX_CDM_DISCONNECT = &H400A0005
+    STATUS_CTX_CLOSE_PENDING = &HC00A0006
+    STATUS_CTX_NO_OUTBUF = &HC00A0007
+    STATUS_CTX_MODEM_INF_NOT_FOUND = &HC00A0008
+    STATUS_CTX_INVALID_MODEMNAME = &HC00A0009
+    STATUS_CTX_RESPONSE_ERROR = &HC00A000A
+    STATUS_CTX_MODEM_RESPONSE_TIMEOUT = &HC00A000B
+    STATUS_CTX_MODEM_RESPONSE_NO_CARRIER = &HC00A000C
+    STATUS_CTX_MODEM_RESPONSE_NO_DIALTONE = &HC00A000D
+    STATUS_CTX_MODEM_RESPONSE_BUSY = &HC00A000E
+    STATUS_CTX_MODEM_RESPONSE_VOICE = &HC00A000F
+    STATUS_CTX_TD_ERROR = &HC00A0010
+    STATUS_CTX_LICENSE_CLIENT_INVALID = &HC00A0012
+    STATUS_CTX_LICENSE_NOT_AVAILABLE = &HC00A0013
+    STATUS_CTX_LICENSE_EXPIRED = &HC00A0014
+    STATUS_CTX_WINSTATION_NOT_FOUND = &HC00A0015
+    STATUS_CTX_WINSTATION_NAME_COLLISION = &HC00A0016
+    STATUS_CTX_WINSTATION_BUSY = &HC00A0017
+    STATUS_CTX_BAD_VIDEO_MODE = &HC00A0018
+    STATUS_CTX_GRAPHICS_INVALID = &HC00A0022
+    STATUS_CTX_NOT_CONSOLE = &HC00A0024
+    STATUS_CTX_CLIENT_QUERY_TIMEOUT = &HC00A0026
+    STATUS_CTX_CONSOLE_DISCONNECT = &HC00A0027
+    STATUS_CTX_CONSOLE_CONNECT = &HC00A0028
+    STATUS_CTX_SHADOW_DENIED = &HC00A002A
+    STATUS_CTX_WINSTATION_ACCESS_DENIED = &HC00A002B
+    STATUS_CTX_INVALID_WD = &HC00A002E
+    STATUS_CTX_WD_NOT_FOUND = &HC00A002F
+    STATUS_CTX_SHADOW_INVALID = &HC00A0030
+    STATUS_CTX_SHADOW_DISABLED = &HC00A0031
+    STATUS_RDP_PROTOCOL_ERROR = &HC00A0032
+    STATUS_CTX_CLIENT_LICENSE_NOT_SET = &HC00A0033
+    STATUS_CTX_CLIENT_LICENSE_IN_USE = &HC00A0034
+    STATUS_CTX_SHADOW_ENDED_BY_MODE_CHANGE = &HC00A0035
+    STATUS_CTX_SHADOW_NOT_RUNNING = &HC00A0036
+    STATUS_PNP_BAD_MPS_TABLE = &HC0040035
+    STATUS_PNP_TRANSLATION_FAILED = &HC0040036
+    STATUS_PNP_IRQ_TRANSLATION_FAILED = &HC0040037
+    STATUS_PNP_INVALID_ID = &HC0040038
+    STATUS_SXS_SECTION_NOT_FOUND = &HC0150001
+    STATUS_SXS_CANT_GEN_ACTCTX = &HC0150002
+    STATUS_SXS_INVALID_ACTCTXDATA_FORMAT = &HC0150003
+    STATUS_SXS_ASSEMBLY_NOT_FOUND = &HC0150004
+    STATUS_SXS_MANIFEST_FORMAT_ERROR = &HC0150005
+    STATUS_SXS_MANIFEST_PARSE_ERROR = &HC0150006
+    STATUS_SXS_ACTIVATION_CONTEXT_DISABLED = &HC0150007
+    STATUS_SXS_KEY_NOT_FOUND = &HC0150008
+    STATUS_SXS_VERSION_CONFLICT = &HC0150009
+    STATUS_SXS_WRONG_SECTION_TYPE = &HC015000A
+    STATUS_SXS_THREAD_QUERIES_DISABLED = &HC015000B
+    STATUS_SXS_ASSEMBLY_MISSING = &HC015000C
+    STATUS_SXS_RELEASE_ACTIVATION_CONTEXT = &H4015000D
+    STATUS_SXS_PROCESS_DEFAULT_ALREADY_SET = &HC015000E
+    STATUS_SXS_EARLY_DEACTIVATION = &HC015000F
+    STATUS_SXS_INVALID_DEACTIVATION = &HC0150010
+    STATUS_SXS_MULTIPLE_DEACTIVATION = &HC0150011
+    STATUS_SXS_SYSTEM_DEFAULT_ACTIVATION_CONTEXT_EMPTY = &HC0150012
+    STATUS_SXS_PROCESS_TERMINATION_REQUESTED = &HC0150013
+    STATUS_SXS_CORRUPT_ACTIVATION_STACK = &HC0150014
+    STATUS_SXS_CORRUPTION = &HC0150015
+    STATUS_CLUSTER_INVALID_NODE = &HC0130001
+    STATUS_CLUSTER_NODE_EXISTS = &HC0130002
+    STATUS_CLUSTER_JOIN_IN_PROGRESS = &HC0130003
+    STATUS_CLUSTER_NODE_NOT_FOUND = &HC0130004
+    STATUS_CLUSTER_LOCAL_NODE_NOT_FOUND = &HC0130005
+    STATUS_CLUSTER_NETWORK_EXISTS = &HC0130006
+    STATUS_CLUSTER_NETWORK_NOT_FOUND = &HC0130007
+    STATUS_CLUSTER_NETINTERFACE_EXISTS = &HC0130008
+    STATUS_CLUSTER_NETINTERFACE_NOT_FOUND = &HC0130009
+    STATUS_CLUSTER_INVALID_REQUEST = &HC013000A
+    STATUS_CLUSTER_INVALID_NETWORK_PROVIDER = &HC013000B
+    STATUS_CLUSTER_NODE_DOWN = &HC013000C
+    STATUS_CLUSTER_NODE_UNREACHABLE = &HC013000D
+    STATUS_CLUSTER_NODE_NOT_MEMBER = &HC013000E
+    STATUS_CLUSTER_JOIN_NOT_IN_PROGRESS = &HC013000F
+    STATUS_CLUSTER_INVALID_NETWORK = &HC0130010
+    STATUS_CLUSTER_NO_NET_ADAPTERS = &HC0130011
+    STATUS_CLUSTER_NODE_UP = &HC0130012
+    STATUS_CLUSTER_NODE_PAUSED = &HC0130013
+    STATUS_CLUSTER_NODE_NOT_PAUSED = &HC0130014
+    STATUS_CLUSTER_NO_SECURITY_CONTEXT = &HC0130015
+    STATUS_CLUSTER_NETWORK_NOT_INTERNAL = &HC0130016
+    STATUS_CLUSTER_POISONED = &HC0130017
+    STATUS_LOG_SECTOR_INVALID = &HC01A0001
+    STATUS_LOG_SECTOR_PARITY_INVALID = &HC01A0002
+    STATUS_LOG_SECTOR_REMAPPED = &HC01A0003
+    STATUS_LOG_BLOCK_INCOMPLETE = &HC01A0004
+    STATUS_LOG_INVALID_RANGE = &HC01A0005
+    STATUS_LOG_BLOCKS_EXHAUSTED = &HC01A0006
+    STATUS_LOG_READ_CONTEXT_INVALID = &HC01A0007
+    STATUS_LOG_RESTART_INVALID = &HC01A0008
+    STATUS_LOG_BLOCK_VERSION = &HC01A0009
+    STATUS_LOG_BLOCK_INVALID = &HC01A000A
+    STATUS_LOG_READ_MODE_INVALID = &HC01A000B
+    STATUS_LOG_NO_RESTART = &H401A000C
+    STATUS_LOG_METADATA_CORRUPT = &HC01A000D
+    STATUS_LOG_METADATA_INVALID = &HC01A000E
+    STATUS_LOG_METADATA_INCONSISTENT = &HC01A000F
+    STATUS_LOG_RESERVATION_INVALID = &HC01A0010
+    STATUS_LOG_CANT_DELETE = &HC01A0011
+    STATUS_LOG_CONTAINER_LIMIT_EXCEEDED = &HC01A0012
+    STATUS_LOG_START_OF_LOG = &HC01A0013
+    STATUS_LOG_POLICY_ALREADY_INSTALLED = &HC01A0014
+    STATUS_LOG_POLICY_NOT_INSTALLED = &HC01A0015
+    STATUS_LOG_POLICY_INVALID = &HC01A0016
+    STATUS_LOG_POLICY_CONFLICT = &HC01A0017
+    STATUS_LOG_PINNED_ARCHIVE_TAIL = &HC01A0018
+    STATUS_LOG_RECORD_NONEXISTENT = &HC01A0019
+    STATUS_LOG_RECORDS_RESERVED_INVALID = &HC01A001A
+    STATUS_LOG_SPACE_RESERVED_INVALID = &HC01A001B
+    STATUS_LOG_TAIL_INVALID = &HC01A001C
+    STATUS_LOG_FULL = &HC01A001D
+    STATUS_LOG_MULTIPLEXED = &HC01A001E
+    STATUS_LOG_DEDICATED = &HC01A001F
+    STATUS_LOG_ARCHIVE_NOT_IN_PROGRESS = &HC01A0020
+    STATUS_LOG_ARCHIVE_IN_PROGRESS = &HC01A0021
+    STATUS_LOG_EPHEMERAL = &HC01A0022
+    STATUS_LOG_NOT_ENOUGH_CONTAINERS = &HC01A0023
+    STATUS_LOG_CLIENT_ALREADY_REGISTERED = &HC01A0024
+    STATUS_LOG_CLIENT_NOT_REGISTERED = &HC01A0025
+    STATUS_LOG_FULL_HANDLER_IN_PROGRESS = &HC01A0026
+    STATUS_LOG_CONTAINER_READ_FAILED = &HC01A0027
+    STATUS_LOG_CONTAINER_WRITE_FAILED = &HC01A0028
+    STATUS_LOG_CONTAINER_OPEN_FAILED = &HC01A0029
+    STATUS_LOG_CONTAINER_STATE_INVALID = &HC01A002A
+    STATUS_LOG_STATE_INVALID = &HC01A002B
+    STATUS_LOG_PINNED = &HC01A002C
+    STATUS_LOG_METADATA_FLUSH_FAILED = &HC01A002D
+    STATUS_LOG_INCONSISTENT_SECURITY = &HC01A002E
+    STATUS_COULD_NOT_RESIZE_LOG = &H80190009
+End Enum
+
+Public Const METHOD_BUFFERED = 0
+Public Const METHOD_IN_DIRECT  = 1
+Public Const METHOD_OUT_DIRECT  = 2
+Public Const METHOD_NEITHER  = 3
+
+Public Const FILE_ANY_ACCESS = &H0
+Public Const FILE_READ_ACCESS = &H1
+Public Const FILE_WRITE_ACCESS = &H2
+
+Public Type CLIENT_ID
+    UniqueProcess As LongPtr
+    UniqueThread  As LongPtr
+End Type
+
+Public Enum MM_COPY_FLAGS
+    MM_COPY_MEMORY_PHYSICAL = &H1
+    MM_COPY_MEMORY_VIRTUAL = &H2
+End Enum
+
+Public Enum MDL_FLAGS
+    MDL_MAPPED_TO_SYSTEM_VA = &H0001
+    MDL_PAGES_LOCKED = &H0002
+    MDL_SOURCE_IS_NONPAGED_POOL = &H0004
+    MDL_ALLOCATED_FIXED_SIZE = &H0008
+    MDL_PARTIAL = &H0010
+    MDL_PARTIAL_HAS_BEEN_MAPPED = &H0020
+    MDL_IO_PAGE_READ = &H0040
+    MDL_WRITE_OPERATION = &H0080
+    MDL_LOCKED_PAGE_TABLES = &H0100
+    MDL_PARENT_MAPPED_SYSTEM_VA = MDL_LOCKED_PAGE_TABLES
+    MDL_FREE_EXTRA_PTES = &H0200
+    MDL_DESCRIBES_AWE = &H0400
+    MDL_IO_SPACE = &H0800
+    MDL_NETWORK_HEADER = &H1000
+    MDL_MAPPING_CAN_FAIL = &H2000
+    MDL_PAGE_CONTENTS_INVARIANT = &H4000
+    MDL_ALLOCATED_MUST_SUCCEED = MDL_PAGE_CONTENTS_INVARIANT
+    MDL_INTERNAL = &H8000&
+    MDL_MAPPING_FLAGS = (MDL_MAPPED_TO_SYSTEM_VA Or MDL_PAGES_LOCKED Or MDL_SOURCE_IS_NONPAGED_POOL Or MDL_PARTIAL_HAS_BEEN_MAPPED Or MDL_PARENT_MAPPED_SYSTEM_VA /* Or MDL_SYSTEM_VA */ Or MDL_IO_SPACE)
+End Enum
+Public Type MDL
+    Next As LongPtr 'PMDL
+    Size As Integer
+    /* [ TypeHint(MDL_FLAGS) ] */ MdlFlags As Integer
+    Process As LongPtr 'PEPROCESS
+    MappedSystemVa As LongPtr '/ see creators for field size annotations.
+    StartVa As LongPtr '/ see creators for validity; could be address 0.
+    ByteCount As Long
+    ByteOffset As Long
+End Type
+Public Enum MM_PAGE_PRIORITY
+    LowPagePriority = 0
+    NormalPagePriority = 16
+    HighPagePriority = 32
+End Enum
+
+
+Public Type KSYSTEM_TIME
+    LowPart As Long '0x0
+    High1Time As Long '0x4
+    High2Time As Long '0x8
+End Type
+Public Enum NT_PRODUCT_TYPE
+    NtProductWinNt = 1
+    NtProductLanManNt = 2
+    NtProductServer = 3
+End Enum
+Public Enum ALTERNATIVE_ARCHITECTURE_TYPE
+    StandardDesign = 0
+    NEC98x86 = 1
+    EndAlternatives = 2
+End Enum
+Public Type KUSER_SHARED_DATA
+    TickCountLowDeprecated As Long '0x0
+    TickCountMultiplier As Long '0x4
+    InterruptTime As KSYSTEM_TIME '0x8
+    SystemTime As KSYSTEM_TIME '0x14
+    TimeZoneBias As KSYSTEM_TIME '0x20
+    ImageNumberLow As Integer '0x2c
+    ImageNumberHigh As Integer '0x2e
+    NtSystemRoot(0 To 259) As Integer '0x30
+    MaxStackTraceDepth As Long '0x238
+    CryptoExponent As Long '0x23c
+    TimeZoneId As Long '0x240
+    LargePageMinimum As Long '0x244
+    Reserved2(0 To 6) As Long '0x248
+    NtProductType As NT_PRODUCT_TYPE '0x264
+    ProductTypeIsValid As Byte '0x268
+    NtMajorVersion As Long '0x26c
+    NtMinorVersion As Long '0x270
+    ProcessorFeatures(0 To 63) As Byte '0x274
+    Reserved1 As Long '0x2b4
+    Reserved3 As Long '0x2b8
+    TimeSlip As Long '0x2bc
+    AlternativeArchitecture As ALTERNATIVE_ARCHITECTURE_TYPE '0x2c0
+    SystemExpirationDate As LARGE_INTEGER '0x2c8
+    SuiteMask As Long '0x2d0
+    KdDebuggerEnabled As Byte '0x2d4
+    NXSupportPolicy As Byte '0x2d5
+    ActiveConsoleId As Long '0x2d8
+    DismountCount As Long '0x2dc
+    ComPlusPackage As Long '0x2e0
+    LastSystemRITEventTickCount As Long '0x2e4
+    NumberOfPhysicalPages As Long '0x2e8
+    SafeBootMode As Byte '0x2ec
+    TraceLogging As Long '0x2f0
+    TestRetInstruction As LongLong '0x2f8
+    SystemCall As Long '0x300
+    SystemCallReturn As Long '0x304
+    SystemCallPad(0 To 2) As LongLong '0x308
+    'union
+    '{
+    '    volatile struct _KSYSTEM_TIME TickCount;                            //0x320
+    TickCountQuad As LongLong '0x320
+    Pad As LongLong 'Since not using _KSYSTEM_TIME
+    '};
+    Cookie As Long '0x330
+    'Wow64SharedInformation(0 To 15) As Long '0x334
+End Type
+
+Public Enum ProcessAccessRights
+    PROCESS_ALL_ACCESS = (STANDARD_RIGHTS_REQUIRED Or SYNCHRONIZE Or &HFFF&)
+    PROCESS_TERMINATE = &H1 ' Enables using the process handle in the TerminateProcess function to terminate the process.
+    PROCESS_CREATE_THREAD = &H2   ' Enables using the process handle in the CreateRemoteThread function to create a thread in the process.
+    PROCESS_VM_OPERATION = &H8 ' Enables using the process handle in the VirtualProtectEx and WriteProcessMemory functions to modify the virtual memory of the process.
+    PROCESS_VM_READ = &H10     ' Enables using the process handle in the ReadProcessMemory function to read from the virtual memory of the process.
+    PROCESS_VM_WRITE = &H20 ' Enables using the process handle in the WriteProcessMemory function to write to the virtual memory of the process.
+    PROCESS_DUP_HANDLE = &H40   ' Enables using the process handle as either the source or target process in the DuplicateHandle function to duplicate a handle
+    PROCESS_CREATE_PROCESS = &H80 ' Required to use this process as the parent process with PROC_THREAD_ATTRIBUTE_PARENT_PROCESS.
+    PROCESS_SET_QUOTA = &H100 ' Required to set memory limits using SetProcessWorkingSetSize.
+    PROCESS_SET_INFORMATION = &H200 ' Enables using the process handle in the SetPriorityClass function to set the priority class of the process.
+    PROCESS_QUERY_INFORMATION = &H400 ' Enables using the process handle in the GetExitCodeProcess and GetPriorityClass functions to read information from the process object.
+    PROCESS_SUSPEND_RESUME = &H800 ' Required to suspend or resume a process.
+    PROCESS_QUERY_LIMITED_INFORMATION = &H1000 ' Required to retrieve certain information about a process (see GetExitCodeProcess, GetPriorityClass, IsProcessInJob, QueryFullProcessImageName).
+End Enum
+Public Enum ThreadAccess
+    THREAD_DIRECT_IMPERSONATION = &H200
+    THREAD_GET_CONTEXT = &H8
+    THREAD_IMPERSONATE = &H100
+    THREAD_QUERY_INFORMATION = &H40
+    THREAD_QUERY_LIMITED_INFORMATION = &H800
+    THREAD_SET_CONTEXT = &H10
+    THREAD_SET_INFORMATION = &H20
+    THREAD_SET_LIMITED_INFORMATION = &H400
+    THREAD_SET_THREAD_TOKEN = &H80
+    THREAD_SUSPEND_RESUME = &H2
+    THREAD_TERMINATE = &H1
+End Enum
+
+Public Enum PortAccessRights
+    PORT_CONNECT = &H0001
+    PORT_ALL_ACCESS = (STANDARD_RIGHTS_REQUIRED Or SYNCHRONIZE Or &H1)
+End Enum
+
+Public Type PORT_MESSAGE
+    Length As Long
+    ' [ Description("union {" & vbCrLf & _
+    '               "  struct{" & vbCrLf & _
+    '               "    CSHORT Type;" & vbCrLf & _
+    '               "    CSHORT DataInfoOffset;" & vbCrLf & _
+    '               "  } s2;" & vbCrLf & _
+    '               "  ULONG ZeroInit;" & vbCrLf & _
+    '               "}") ]
+    u2 As Long
+    ClientId As CLIENT_ID
+    MessageId As Long
+    ClientViewSizeOrCallbackId As LongPtr
+End Type
+Public Type PORT_DATA_ENTRY
+    Base As LongPtr
+    Size As Long
+End Type
+[ Description ("⚠️ **WARNING:** You cannot use this struct as-is due to SAFEARRAY considerations. Copy the first 8 bytes, determine the size, then copy the rest into bRawData(0) ") ]
+Public Type PORT_DATA_INFORMATION
+    CountDataEntries As Long
+    'DataEntries(0 To 0) As PORT_DATA_ENTRY
+End Type
+Public Enum NT_LPC_MSG_TYPE
+    LPC_REQUEST = 1
+    LPC_REPLY = 2
+    LPC_DATAGRAM = 3
+    LPC_LOST_REPLY = 4
+    LPC_PORT_CLOSED = 5
+    LPC_CLIENT_DIED = 6
+    LPC_EXCEPTION = 7
+    LPC_DEBUG_EVENT = 8
+    LPC_ERROR_EVENT = 9
+    LPC_CONNECTION_REQUEST = 10
+    LPC_KERNELMODE_MESSAGE = &H8000&
+    LPC_NO_IMPERSONATE = &H4000&
+End Enum
+
+#If Win64 Then
+Public Const PORT_MAXIMUM_MESSAGE_LENGTH = 512
+#Else
+Public Const PORT_MAXIMUM_MESSAGE_LENGTH = 256
+#End If
+
+Public Type LPC_MESSAGE
+    DataLength As Integer
+    Length As Integer
+    /* [ TypeHint(NT_LPC_MSG_TYPE) ] */ MessageType As Integer
+    DataInfoOffset As Integer
+    ClientId As CLIENT_ID
+    MessageId As Long
+    CallbackId As Long
+End Type
+Public Enum HARDERROR_RESPONSE_OPTION
+    HardError_OptionAbortRetryIgnore
+    HardError_OptionOk
+    HardError_OptionOkCancel
+    HardError_OptionRetryCancel
+    HardError_OptionYesNo
+    HardError_OptionYesNoCancel
+    HardError_OptionShutdownSystem
+End Enum
+Public Enum HARDERROR_RESPONSE
+    HardError_ResponseReturnToCaller
+    HardError_ResponseNotHandled
+    HardError_ResponseAbort
+    HardError_ResponseCancel
+    HardError_ResponseIgnore
+    HardError_ResponseNo
+    HardError_ResponseOk
+    HardError_ResponseRetry
+    HardError_ResponseYes
+End Enum
+Public Const HARDERROR_OVERRIDE_ERRORMODE     = &H10000000
+
+
+Public Type FAST_MUTEX
+    Count As Long
+    Owner As LongPtr
+    Contention As Long
+    Event As KEVENT
+    OldIrql As Long
+End Type
+
+Private Const szCmKeyObjectType = "CmKeyObjectType"
+Private Const szIoFileObjectType = "IoFileObjectType"
+Private Const szExEventObjectType = "ExEventObjectType"
+Private Const szExSemaphoreObjectType = "ExSemaphoreObjectType"
+Private Const szTmTransactionManagerObjectType = "TmTransactionManagerObjectType"
+Private Const szTmResourceManagerObjectType = "TmResourceManagerObjectType"
+Private Const szTmEnlistmentObjectType = "TmEnlistmentObjectType"
+Private Const szTmTransactionObjectType = "TmTransactionObjectType"
+Private Const szPsProcessType = "PsProcessType"
+Private Const szPsThreadType = "PsThreadType"
+Private Const szPsJobType = "PsJobType"
+Private Const szSeTokenObjectType = "SeTokenObjectType"
+Private Const szExDesktopObjectType = "ExDesktopObjectType"
+Private usCmKeyObjectType As UNICODE_STRING
+Private usIoFileObjectType As UNICODE_STRING
+Private usExEventObjectType As UNICODE_STRING
+Private usExSemaphoreObjectType As UNICODE_STRING
+Private usTmTransactionManagerObjectType As UNICODE_STRING
+Private usTmResourceManagerObjectType As UNICODE_STRING
+Private usTmEnlistmentObjectType As UNICODE_STRING
+Private usTmTransactionObjectType As UNICODE_STRING
+Private usPsProcessType As UNICODE_STRING
+Private usPsThreadType As UNICODE_STRING
+Private usPsJobType As UNICODE_STRING
+Private usSeTokenObjectType As UNICODE_STRING
+Private usExDesktopObjectType As UNICODE_STRING
+
+
+Public Enum PSCNI_Flags
+    PSCNI_FILE_OPEN_NAME_AVAILABLE = &H01
+    PSCNI_IS_SUBSYSTEM_PROCESS = &H02
+End Enum
+Public Type PS_CREATE_NOTIFY_INFO
+    Size As LongPtr
+    Flags As PSCNI_Flags
+    ParentProcessId As LongPtr
+    CreatingThreadId As CLIENT_ID
+    FileObject As LongPtr 'PFILE_OBJECT
+    ImageFileName As LongPtr 'PUNICODE_STRING
+    CommandLine As LongPtr 'PUNICODE_STRING
+    CreationStatus As NTSTATUS 'Read/Write
+End Type
+
+
+
+Public Enum OB_OPERATION
+    OB_OPERATION_HANDLE_CREATE = &H00000001
+    OB_OPERATION_HANDLE_DUPLICATE = &H00000002
+End Enum
+
+Public Type OB_OPERATION_REGISTRATION
+    ObjectType As LongPtr '_In_ POBJECT_TYPE
+    Operations As OB_OPERATION
+    PreOperation As LongPtr '_In_ POB_PRE_OPERATION_CALLBACK
+    PostOperation As LongPtr '_In_ POB_POST_OPERATION_CALLBACK
+End Type
+Public Type OB_CALLBACK_REGISTRATION
+    Version As Integer 'OB_FLT_REGISTRATION_VERSION
+    OperationRegistrationCount As Integer
+    Altitude As UNICODE_STRING
+    RegistrationContext As LongPtr
+    OperationRegistration As LongPtr '*OB_OPERATION_REGISTRATION
+End Type
+
+Public Type OB_PRE_CREATE_HANDLE_INFORMATION
+    /* [ TypeHint(ProcessAccessRights, ThreadAccessRights) ] */ DesiredAccess As ProcessAccessRights
+    /* [ TypeHint(ProcessAccessRights, ThreadAccessRights) ] */ OriginalDesiredAccess As ProcessAccessRights
+End Type
+Public Type OB_PRE_DUPLICATE_HANDLE_INFORMATION
+    /* [ TypeHint(ProcessAccessRights, ThreadAccessRights) ] */ DesiredAccess As ProcessAccessRights
+    /* [ TypeHint(ProcessAccessRights, ThreadAccessRights) ] */ OriginalDesiredAccess As ProcessAccessRights
+    SourceProcess As LongPtr
+    TargetProcess As LongPtr
+End Type
+
+Public Type OB_PRE_OPERATION_INFORMATION
+    Operation As OB_OPERATION
+    [ Description ("This is a union with an undefined flags param and a bitfield with a single bit defined: KernelHandle. I've collapsed this logic to a BOOL, 1 = bit set, 0 = not.") ]
+    KernelHandle As BOOL
+    Object As LongPtr
+    ObjectType As LongPtr
+    CallContext As LongPtr
+    [ Description ("Union: OB_PRE_DUPLICATE_HANDLE_INFORMATION or OB_PRE_CREATE_HANDLE_INFORMATION") ]
+    #If Win64 Then
+    Parameters(23) As Byte
+    #Else
+    Parameters(15) As Byte
+    #End If
+End Type
+
+Public Type OB_POST_CREATE_HANDLE_INFORMATION
+    /* [ TypeHint(ProcessAccessRights, ThreadAccessRights) ] */ GrantedAccess As ProcessAccessRights
+End Type
+Public Type OB_POST_DUPLICATE_HANDLE_INFORMATION
+    /* [ TypeHint(ProcessAccessRights, ThreadAccessRights) ] */ GrantedAccess As ProcessAccessRights
+End Type
+[ Description ("Since both union options are the same, just provide the member.") ]
+Public Type OB_POST_OPERATION_PARAMETERS
+    /* [ TypeHint(ProcessAccessRights, ThreadAccessRights) ] */ GrantedAccess As ProcessAccessRights
+End Type
+
+Public Type OB_POST_OPERATION_INFORMATION
+    Operation As OB_OPERATION
+    [ Description ("This is a union with an undefined flags param and a bitfield with a single bit defined: KernelHandle. I've collapsed this logic to a BOOL, 1 = bit set, 0 = not.") ]
+    KernelHandle As BOOL
+    Object As LongPtr
+    ObjectType As LongPtr
+    CallContext As LongPtr
+    ReturnStatus As NTSTATUS
+    Parameters As OB_POST_OPERATION_PARAMETERS
+End Type
+
+Public Enum OB_PREOP_CALLBACK_STATUS
+    OB_PREOP_SUCCESS
+End Enum
+
+
+Public Const OB_FLT_REGISTRATION_VERSION = &H100
+
+Public Type RTL_OSVERSIONINFOW
+    dwOSVersionInfoSize As Long
+    dwMajorVersion As Long
+    dwMinorVersion As Long
+    dwBuildNumber As Long
+    dwPlatformId As Long
+    szCSDVersion(0 To 127) As Integer ' Maintenance string for PSS usage
+End Type
+Public Type RTL_OSVERSIONINFOEXW
+    dwOSVersionInfoSize As Long
+    dwMajorVersion As Long
+    dwMinorVersion As Long
+    dwBuildNumber As Long
+    dwPlatformId As Long
+    szCSDVersion(0 To 127) As Integer ' Maintenance string for PSS usage
+    wServicePackMajor As Integer
+    wServicePackMinor As Integer
+    wSuiteMask As Integer
+    wProductType As Byte
+    wReserved As Byte
+End Type
+
+
+'Drivers can only import from ntoskrnl.exe. You need to be careful which language features you use; strings and arrays besides 1-D inside UDTs
+'utilize APIs behind the scenes from other libraries (currently, I opened a feature request for non-SAFEARRAY arrays), and cannot be used in drivers.
+[ UseGetLastError (False) ]
+Public Declare PtrSafe Function DbgPrint CDecl Lib "ntoskrnl.exe" (ByVal Format As LongPtr /* Currently unsupported in kernel mode: , ByVal ParamArray Args As Any()*/) As Long
+Public Declare PtrSafe Function DbgPrint1 CDecl Lib "ntoskrnl.exe" Alias "DbgPrint" (ByVal Format As LongPtr, Arg1 As Any) As Long
+Public Declare PtrSafe Function DbgPrint2 CDecl Lib "ntoskrnl.exe" Alias "DbgPrint" (ByVal Format As LongPtr, Arg1 As Any, Arg2 As Any) As Long
+Public Declare PtrSafe Function DbgPrint3 CDecl Lib "ntoskrnl.exe" Alias "DbgPrint" (ByVal Format As LongPtr, Arg1 As Any, Arg2 As Any, Arg3 As Any) As Long
+
+Public Declare PtrSafe Function IoCreateDevice Lib "ntoskrnl.exe" (DriverObject As DRIVER_OBJECT, _
+                                                                    ByVal DeviceExtensionSize As Long, _
+                                                                    DeviceName As UNICODE_STRING, _
+                                                                    ByVal DeviceType As Long, _
+                                                                    ByVal DeviceCharacteristics As Long, _
+                                                                    ByVal Exclusive As Long, _
+                                                                    DeviceObject As DEVICE_OBJECT) As Long
+
+Public Declare PtrSafe Sub IoCompleteRequest Lib "ntoskrnl.exe" (pIrp As IRP, ByVal PriorityBoost As Byte)
+Public Declare PtrSafe Function IoCreateSymbolicLink Lib "ntoskrnl.exe" (SymbolicLinkName As UNICODE_STRING, DeviceName As UNICODE_STRING) As Long
+Public Declare PtrSafe Function IoDeleteSymbolicLink Lib "ntoskrnl.exe" (SymbolicLinkName As UNICODE_STRING) As Long
+Public Declare PtrSafe Sub IoDeleteDevice Lib "ntoskrnl.exe" (DeviceObject As Any)
+Public Declare PtrSafe Function IoAllocateDriverObjectExtension Lib "ntoskrnl.exe" (DriverObject As DRIVER_OBJECT, ClientIdentificationAddress As Any, ByVal DriverObjectExtensionSize As Long, DriverExtensionObject As LongPtr) As Long
+Public Declare PtrSafe Function IoGetDriverObjectExtension Lib "ntoskrnl.exe" (DriverObject As DRIVER_OBJECT, ClientIdentificationAddress As Any) As LongPtr
+Public Declare PtrSafe Function IoAcquireRemoveLockEx Lib "ntoskrnl.exe" (RemoveLock As IO_REMOVE_LOCK, Tag As Any, ByVal File As LongPtr, ByVal Line As Long, ByVal RemlockSize As Long) As Long
+Public Declare PtrSafe Sub IoReleaseRemoveLockEx Lib "ntoskrnl.exe" (RemoveLock As IO_REMOVE_LOCK, Tag As Any, ByVal RemlockSize As Long)
+Public Declare PtrSafe Sub IoReleaseRemoveLockAndWaitEx Lib "ntoskrnl.exe" (RemoveLock As IO_REMOVE_LOCK, Tag As Any, ByVal RemlockSize As Long)
+Public Declare PtrSafe Sub IoInitializeRemoveLockEx Lib "ntoskrnl.exe" (RemoveLock As IO_REMOVE_LOCK, ByVal AllocateTag As Long, ByVal MaxLockedMinutes As Long, ByVal HighWaterMark As Long, ByVal RemlockSize As Long)
+Public Declare PtrSafe Function IoAttachDeviceToDeviceStack Lib "ntoskrnl.exe" (SourceDevice As DEVICE_OBJECT, TargetDevice As DEVICE_OBJECT) As LongPtr
+Public Declare PtrSafe Function IoSetDeviceInterfaceState Lib "ntoskrnl.exe" (SymbolicLinkName As UNICODE_STRING, ByVal Enable As Byte) As Long
+Public Declare PtrSafe Sub IoDetachDevice Lib "ntoskrnl.exe" (TargetDevice As DEVICE_OBJECT)
+
+Public Declare PtrSafe Function IofCallDriver Lib "ntoskrnl.exe" (DeviceObject As DEVICE_OBJECT, pIrp As IRP) As Long
+
+Public Declare PtrSafe Function PsGetProcessId Lib "ntoskrnl.exe" (ByVal Process As LongPtr) As LongPtr
+Public Declare PtrSafe Function PsGetCurrentProcess Lib "ntoskrnl.exe" Alias "IoGetCurrentProcess" () As LongPtr
+Public Declare PtrSafe Function PsGetThreadProcessId Lib "ntoskrnl.exe" (ByVal Thread As LongPtr) As LongPtr
+Public Declare PtrSafe Function PsLookupProcessByProcessId Lib "ntoskrnl.exe" (ByVal ProcessId As LongPtr, Process As LongPtr /* PEPROCESS* */) As NTSTATUS
+Public Declare PtrSafe Function PsSetCreateProcessNotifyRoutine Lib "ntoskrnl.exe" (ByVal NotifyRoutine As LongPtr, ByVal Remove As Byte) As NTSTATUS
+Public Declare PtrSafe Function PsSetCreateProcessNotifyRoutineEx Lib "ntoskrnl.exe" (ByVal NotifyRoutine As LongPtr, ByVal Remove As Byte) As NTSTATUS
+
+
+
+Public Declare PtrSafe Function RtlGetVersion Lib "ntoskrnl.exe" (lpVersionInformation As Any) As Long
+Public Declare PtrSafe Sub RtlInitUnicodeString Lib "ntoskrnl.exe" (DestinationString As UNICODE_STRING, ByVal SourceString As LongPtr)
+Public Declare PtrSafe Sub RtlCopyUnicodeString Lib "ntoskrnl.exe" (DestinationString As Any, SourceString As UNICODE_STRING)
+Public Declare PtrSafe Function RtlAppendUnicodeStringToString Lib "ntoskrnl.exe" (Destination As UNICODE_STRING, Source As UNICODE_STRING) As Long
+Public Declare PtrSafe Function RtlUpcaseUnicodeString Lib "ntoskrnl.exe" (DestinationString As UNICODE_STRING, SourceString As UNICODE_STRING, ByVal AllocateDestinationString As Byte) As Long
+Public Declare PtrSafe Function RtlEqualUnicodeString Lib "ntoskrnl.exe" (String1 As UNICODE_STRING, String2 As UNICODE_STRING, ByVal CaseInSensitive As Byte) As Byte
+Public Declare PtrSafe Sub RtlFreeUnicodeString Lib "ntoskrnl.exe" (UnicodeString As UNICODE_STRING)
+Public Declare PtrSafe Function RtlQueryRegistryValues Lib "ntoskrnl.exe" (ByVal RelativeTo As Long, ByVal Path As LongPtr, QueryTable As RTL_QUERY_REGISTRY_TABLE, ByVal Context As LongPtr, ByVal Environment As LongPtr) As Long
+Public Declare PtrSafe Sub RtlAcquirePebLock Lib "ntoskrnl.exe" ()
+Public Declare PtrSafe Sub RtlReleasePebLock Lib "ntoskrnl.exe" ()
+Public Declare PtrSafe Function RtlNtStatusToDosError Lib "ntoskrnl.exe" (ByVal ntStatus As Long) As Long
+Public Declare PtrSafe Function RtlFindExportedRoutineByName Lib "ntoskrnl.exe" (ByVal DllBase As LongPtr, ByVal RoutineName As LongPtr) As LongPtr
+[ Description ("Generates a uniform random number using D.H. Lehmer's 1948 algorithm.") ]
+Public Declare PtrSafe Function RtlUniform Lib "ntoskrnl.exe" (Seed As Long) As Long
+Public Declare PtrSafe Sub CopyMemory Lib "ntoskrnl.exe" Alias "RtlMoveMemory" (Destination As Any, Source As Any, ByVal Length As LongPtr)
+Public Declare PtrSafe Sub ZeroMemory Lib "ntoskrnl.exe" Alias "RtlZeroMemory" (Destination As Any, ByVal Length As LongPtr)
+Public Declare PtrSafe Function CompareMemory Lib "ntoskrnl.exe" Alias "RtlCompareMemory" (Source1 As Any, Source2 As Any, ByVal Length As LongPtr) As LongPtr
+
+Public Declare PtrSafe Function ExAllocatePoolWithTag Lib "ntoskrnl.exe" (ByVal PoolType As POOL_TYPE, ByVal NumberOfBytes As LongPtr, ByVal Tag As Long) As LongPtr
+Public Declare PtrSafe Sub ExFreePoolWithTag Lib "ntoskrnl.exe" (P As Any, ByVal Tag As Long)
+Public Declare PtrSafe Sub ExAcquireFastMutex Lib "ntoskrnl.exe" (FastMutex As FAST_MUTEX)
+Public Declare PtrSafe Sub ExReleaseFastMutex Lib "ntoskrnl.exe" (FastMutex As FAST_MUTEX)
+Public Declare PtrSafe Sub ExTryToAcquireFastMutex Lib "ntoskrnl.exe" (FastMutex As FAST_MUTEX)
+Public Declare PtrSafe Function ExRaiseHardError Lib "ntoskrnl.exe" (ByVal ErrorStatus As NTSTATUS, ByVal NumberOfParameters As Long, ByVal UnicodeStringParametersMask As Long, Parameters As Any, ByVal ValidResponseOptions As HARDERROR_RESPONSE_OPTION, Response As HARDERROR_RESPONSE) As NTSTATUS
+
+
+Public Declare PtrSafe Sub ExInitializeNPagedLookasideList Lib "ntoskrnl.exe" (Lookaside As LongPtr, ByVal Allocate As LongPtr, ByVal Free As LongPtr, ByVal Flags As Long, ByVal Size As LongPtr, ByVal Tag As Long, ByVal Depth As Integer)
+#If Win64 Then
+Public Declare PtrSafe Function InterlockedPopEntrySList Lib "ntoskrnl.exe" Alias "ExpInterlockedPopEntrySList" (ByVal ListHead As LongPtr) As LongPtr
+#Else
+Public Declare PtrSafe Function InterlockedPopEntrySList Lib "ntoskrnl.exe" (ByVal ListHead As LongPtr) As LongPtr
+#End If
+
+
+Public Declare PtrSafe Function KeGetCurrentIrql Lib "ntoskrnl.exe" () As Byte
+Public Declare PtrSafe Sub KeInitializeEvent Lib "ntoskrnl.exe" (Event As KEVENT, ByVal Type As EVENT_TYPE, ByVal State As Byte)
+Public Declare PtrSafe Function KeSetEvent Lib "ntoskrnl.exe" (Event As KEVENT, ByVal Increment As Long, ByVal Wait As Byte) As Long
+Public Declare PtrSafe Function KeWaitForSingleObject Lib "ntoskrnl.exe" (Object As Any, ByVal WaitReason As KWAIT_REASON, ByVal WaitMode As Byte, ByVal Alertable As Byte, ByVal Timeout As LongPtr /*PLARGE_INTEGER*/) As Long
+Public Declare PtrSafe Function KeInitializeSpinLock Lib "ntoskrnl.exe" (SpinLock As LongPtr) As Long
+Public Declare PtrSafe Sub KeQuerySystemTime Lib "ntoskrnl.exe" (CurrentTime As LARGE_INTEGER)
+
+Public Declare PtrSafe Sub PoStartNextPowerIrp Lib "ntoskrnl.exe" (pIrp As IRP)
+Public Declare PtrSafe Function PoCallDriver Lib "ntoskrnl.exe" (DeviceObject As DEVICE_OBJECT, pIrp As IRP) As Long
+
+Public Declare PtrSafe Function FsRtlIsNameInExpression Lib "ntoskrnl.exe" (Expression As UNICODE_STRING, pName As UNICODE_STRING, ByVal IgnoreCase As Byte, ByVal UpcaseTable As LongPtr) As Byte
+Public Declare PtrSafe Function FsRtlIsNameInUnUpcasedExpression Lib "ntoskrnl.exe" (Expression As UNICODE_STRING, pName As UNICODE_STRING, ByVal IgnoreCase As Byte, ByVal UpcaseTable As LongPtr) As Byte
+Public Declare PtrSafe Function FsRtlGetFileNameInformation Lib "ntoskrnl.exe" (FileObject As FILE_OBJECT, ByVal NameOptions As Long, FileName As UNICODE_STRING, FileNameInformation As FLT_FILE_NAME_INFORMATION) As NTSTATUS
+
+[ Description ("Returns the full path of a process given an EPROCESS pointer.") ]
+Public Declare PtrSafe Function SeLocateProcessImageName Lib "ntoskrnl.exe" (ByVal Process As LongPtr, ImageFileName As UNICODE_STRING) As NTSTATUS
+
+Public Declare PtrSafe Function MmCopyMemory Lib "ntoskrnl.exe" (TargetAddress As Any, ByVal SourceAddress As LongLong, ByVal NumberOfBytes As Long, ByVal Flags As MM_COPY_FLAGS, NumberOfBytesTransferred As LongPtr) As Long
+Public Declare PtrSafe Function MmIsAddressValid Lib "ntoskrnl.exe" (ByVal VirtualAddress As LongPtr) As Byte
+Public Declare PtrSafe Function MmGetSystemRoutineAddress Lib "ntoskrnl.exe" (SystemRoutineName As UNICODE_STRING) As LongPtr
+
+Public Declare PtrSafe Function ZwCreateFile Lib "ntoskrnl.exe" (FileHandle As LongPtr, [ TypeHint (GenericRights, FileAccessRights) ] ByVal DesiredAccess As Long, ObjectAttributes As OBJECT_ATTRIBUTES, IoStatusBlock As IO_STATUS_BLOCK, AllocationSize As Any, ByVal FileAttributes As FILE_ATTRIBUTES, ByVal ShareAccess As FileShareMode, ByVal CreateDisposition As FileCreateDisposition, ByVal CreateOptions As FileAccessFlags, EaBuffer As Any, ByVal EaLength As Long) As NTSTATUS
+Public Declare PtrSafe Function ZwClose Lib "ntoskrnl.exe" (ByVal Handle As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function ZwOpenProcess Lib "ntoskrnl.exe" (ProcessHandle As LongPtr, [ TypeHint (ProcessAccessRights, StandardAccessTypes) ] ByVal DesiredAccess As Long, ObjectAttributes As OBJECT_ATTRIBUTES, ClientID As CLIENT_ID) As Long
+Public Declare PtrSafe Function ZwSuspendProcess Lib "ntoskrnl.exe" (ByVal hProcess As LongPtr) As Long
+Public Declare PtrSafe Function ZwResumeProcess Lib "ntoskrnl.exe" (ByVal hProcess As LongPtr) As Long
+Public Declare PtrSafe Function ZwDuplicateObject Lib "ntoskrnl.exe" (ByVal SourceProcessHandle As LongPtr, ByVal SourceHandle As LongPtr, pTargetHandle As LongPtr, ByVal DesiredAccess As Long, ByVal HandleAttributes As ObjectAttributeValues, ByVal Options As DuplicateObjectOptions) As Long
+
+Public Declare PtrSafe Function ObOpenObjectByPointer Lib "ntoskrnl.exe" (ByVal Object As LongPtr, ByVal HandleAttributes As ObjectAttributeValues, ByVal PassedAccessState As LongPtr, [ TypeHint (GenericRights) ] ByVal DesiredAccess As Long, ByVal ObjectType As LongPtr, [ TypeHint (MODE) ] ByVal AccessMode As Byte, Handle As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function ObRegisterCallbacks Lib "ntoskrnl.exe" (CallbackRegistration As OB_CALLBACK_REGISTRATION, RegistrationHandle As LongPtr) As NTSTATUS
+Public Declare PtrSafe Sub ObUnRegisterCallbacks Lib "ntoskrnl.exe" (ByVal RegistrationHandle As LongPtr)
+Public Declare PtrSafe Function ObGetFilterVersion Lib "ntoskrnl.exe" () As Integer
+
+Public Sub InitIOCTLs()
+    IOCTL_DISK_GET_DRIVE_GEOMETRY = CTL_CODE(IOCTL_DISK_BASE, &H0000, METHOD_BUFFERED, FILE_ANY_ACCESS)
+    IOCTL_DISK_GET_PARTITION_INFO = CTL_CODE(IOCTL_DISK_BASE, &H0001, METHOD_BUFFERED, FILE_READ_ACCESS)
+    IOCTL_DISK_IS_WRITABLE = CTL_CODE(IOCTL_DISK_BASE, &H0009, METHOD_BUFFERED, FILE_ANY_ACCESS)
+    IOCTL_DISK_GET_MEDIA_TYPES = CTL_CODE(IOCTL_DISK_BASE, &H0300, METHOD_BUFFERED, FILE_ANY_ACCESS)
+    IOCTL_DISK_CHECK_VERIFY = CTL_CODE(IOCTL_DISK_BASE, &H0200, METHOD_BUFFERED, FILE_READ_ACCESS)
+    IOCTL_DISK_SET_PARTITION_INFO = CTL_CODE(IOCTL_DISK_BASE, &H0002, METHOD_BUFFERED, FILE_READ_ACCESS Or FILE_WRITE_ACCESS)
+    IOCTL_MOUNTMGR_QUERY_POINTS = CTL_CODE(MOUNTMGRCONTROLTYPE, 2, METHOD_BUFFERED, FILE_ANY_ACCESS)
+    IOCTL_MOUNTDEV_QUERY_DEVICE_NAME = CTL_CODE(MOUNTDEVCONTROLTYPE, 2, METHOD_BUFFERED, FILE_ANY_ACCESS)
+    FT_BALANCED_READ_MODE = CTL_CODE(FTTYPE, 6, METHOD_NEITHER, FILE_ANY_ACCESS)
+End Sub
+
+'MACROS - The following common functions from driver examples are either implemented as macros
+'   rather than exports, so we must duplicate the underlying macro, or otherwise need to be 
+'   implemented in a different way than C/C++.
+
+[ ConstantFoldable ]
+Public Function CTL_CODE(ByVal DeviceType As Long, ByVal lFunction As Long, ByVal Method As Long, ByVal Access As Long) As Long
+   CTL_CODE = ((DeviceType) << 16) Or ((Access) << 14) Or ((lFunction) << 2) Or (Method)
+End Function
+
+Public Function IoGetCurrentIrpStackLocation(ByRef pIrp As IRP) As LongPtr
+    IoGetCurrentIrpStackLocation = pIrp.CurrentStackLocation
+End Function
+
+Public Function IoGetNextIrpStackLocation(ByRef pIrp As IRP) As LongPtr
+    IoGetNextIrpStackLocation = pIrp.CurrentStackLocation - LenB(Of LongPtr)
+End Function
+
+Public Sub IoCopyCurrentIrpStackLocationToNext(pIrp As IRP)
+    Dim irpSp As LongPtr
+    Dim nextIrpSp As LongPtr
+    irpSp = IoGetCurrentIrpStackLocation(pIrp)
+    nextIrpSp = IoGetNextIrpStackLocation(pIrp)
+    
+    Dim lOffset As LongPtr 'Manually implement FIELD_OFFSET(IO_STACK_LOCATION, CompletionRoutine)
+    #If Win64 Then
+        lOffset = &H38
+    #Else
+        lOffset = &H1C
+    #End If
+    
+    CopyMemory ByVal nextIrpSp, ByVal irpSp, lOffset
+    ZeroMemory ByVal nextIrpSp + 3, 1 'nextIrpSp->Control = 0;
+End Sub
+
+Public Sub IoSkipCurrentIrpStackLocation(pIrp As IRP)
+    pIrp.CurrentLocation += 1
+    pIrp.CurrentStackLocation += 1
+End Sub
+
+Public Sub IoSetCompletionRoutine(pIrp As IRP, ByVal CompletionRoutine As LongPtr, ByVal Context As LongPtr, InvokeOnSuccess As Boolean, InvokeOnError As Boolean, InvokeOnCancel As Boolean)
+    Dim irpSp As LongPtr
+    irpSp = IoGetNextIrpStackLocation(pIrp)
+    Dim lOffset As LongPtr 'Manually implement FIELD_OFFSET(IO_STACK_LOCATION, CompletionRoutine)
+    #If Win64 Then
+        lOffset = &H38
+    #Else
+        lOffset = &H1C
+    #End If
+    CopyMemory ByVal irpSp + lOffset, CompletionRoutine, LenB(CompletionRoutine)
+    
+    lOffset += LenB(CompletionRoutine)
+    CopyMemory ByVal irpSp + lOffset, Context, LenB(Context)
+    
+    Dim ctl As Byte
+    If InvokeOnSuccess Then ctl = SL_INVOKE_ON_SUCCESS
+    If InvokeOnError Then ctl = ctl Or SL_INVOKE_ON_ERROR
+    If InvokeOnCancel Then ctl = ctl Or SL_INVOKE_ON_CANCEL
+    CopyMemory ByVal irpSp + 3, ctl, LenB(ctl)
+End Sub
+
+Public Function IoAcquireRemoveLock(RemoveLock As IO_REMOVE_LOCK, ByVal Tag As LongPtr, ByVal Line As Long) As Long
+    IoAcquireRemoveLock = IoAcquireRemoveLockEx(RemoveLock, ByVal Tag, StrPtr(SOURCE_FILE), Line, LenB(RemoveLock))
+End Function
+
+Public Sub IoReleaseRemoveLock(RemoveLock As IO_REMOVE_LOCK, ByVal Tag As LongPtr)
+    Call IoReleaseRemoveLockEx(RemoveLock, ByVal Tag, LenB(RemoveLock))
+End Sub
+
+Public Sub IoInitializeRemoveLock(RemoveLock As IO_REMOVE_LOCK, Tag As Long, Maxmin As Long, HighWater As Long)
+    Call IoInitializeRemoveLockEx(RemoveLock, Tag, Maxmin, HighWater, LenB(RemoveLock))
+End Sub
+
+Public Sub IoReleaseRemoveLockAndWait(RemoveLock As IO_REMOVE_LOCK, Tag As Long, RemlockSize As Long)
+    IoReleaseRemoveLockAndWaitEx RemoveLock, Tag, RemlockSize
+End Sub
+
+Public Function IoCallDriver(DeviceObject As DEVICE_OBJECT, pIrp As IRP) As Long
+    IoCallDriver = IofCallDriver(DeviceObject, pIrp)
+End Function
+
+Public Sub InitializeListHead(ListHead As LIST_ENTRY)
+    ListHead.Blink = VarPtr(ListHead)
+    ListHead.Flink = VarPtr(ListHead)
+End Sub
+
+Public Sub InitializeObjectAttributes(p As OBJECT_ATTRIBUTES, ByVal n As LongPtr, ByVal a As ObjectAttributeValues, ByVal r As LongPtr, ByVal s As LongPtr)
+    With p
+        .Length = LenB(Of OBJECT_ATTRIBUTES)
+        .RootDirectory = r
+        .Attributes = a
+        .ObjectName = n
+        .SecurityDescriptor = s
+        .SecurityQualityOfService = 0
+    End With
+End Sub
+
+Public Sub ExInitializeFastMutex(ByRef FastMutex As FAST_MUTEX)
+    FastMutex.Owner = 0
+    FastMutex.Contention = 0
+    KeInitializeEvent FastMutex.Event, SynchronizationEvent, 0
+End Sub
+
+Public Function CmKeyObjectType() As LongPtr
+    If usCmKeyObjectType.lpBuffer = 0 Then
+        RtlInitUnicodeString usCmKeyObjectType, StrPtr(szCmKeyObjectType)
+    End If
+    Return MmGetSystemRoutineAddress(usCmKeyObjectType)
+End Function
+Public Function IoFileObjectType() As LongPtr
+    If usIoFileObjectType.lpBuffer = 0 Then
+        RtlInitUnicodeString usIoFileObjectType, StrPtr(szIoFileObjectType)
+    End If
+    Return MmGetSystemRoutineAddress(usIoFileObjectType)
+End Function
+Public Function ExEventObjectType() As LongPtr
+    If usExEventObjectType.lpBuffer = 0 Then
+        RtlInitUnicodeString usExEventObjectType, StrPtr(szExEventObjectType)
+    End If
+    Return MmGetSystemRoutineAddress(usExEventObjectType)
+End Function
+Public Function ExSemaphoreObjectType() As LongPtr
+    If usExSemaphoreObjectType.lpBuffer = 0 Then
+        RtlInitUnicodeString usExSemaphoreObjectType, StrPtr(szExSemaphoreObjectType)
+    End If
+    Return MmGetSystemRoutineAddress(usExSemaphoreObjectType)
+End Function
+Public Function TmTransactionManagerObjectType() As LongPtr
+    If usTmTransactionManagerObjectType.lpBuffer = 0 Then
+        RtlInitUnicodeString usTmTransactionManagerObjectType, StrPtr(szTmTransactionManagerObjectType)
+    End If
+    Return MmGetSystemRoutineAddress(usTmTransactionManagerObjectType)
+End Function
+Public Function TmResourceManagerObjectType() As LongPtr
+    If usTmResourceManagerObjectType.lpBuffer = 0 Then
+        RtlInitUnicodeString usTmResourceManagerObjectType, StrPtr(szTmResourceManagerObjectType)
+    End If
+    Return MmGetSystemRoutineAddress(usTmResourceManagerObjectType)
+End Function
+Public Function TmEnlistmentObjectType() As LongPtr
+    If usTmEnlistmentObjectType.lpBuffer = 0 Then
+        RtlInitUnicodeString usTmEnlistmentObjectType, StrPtr(szTmEnlistmentObjectType)
+    End If
+    Return MmGetSystemRoutineAddress(usTmEnlistmentObjectType)
+End Function
+Public Function TmTransactionObjectType() As LongPtr
+    If usTmTransactionObjectType.lpBuffer = 0 Then
+        RtlInitUnicodeString usTmTransactionObjectType, StrPtr(szTmTransactionObjectType)
+    End If
+    Return MmGetSystemRoutineAddress(usTmTransactionObjectType)
+End Function
+Public Function PsProcessType() As LongPtr
+    If usPsProcessType.lpBuffer = 0 Then
+        RtlInitUnicodeString usPsProcessType, StrPtr(szPsProcessType)
+    End If
+    Return MmGetSystemRoutineAddress(usPsProcessType)
+End Function
+Public Function PsThreadType() As LongPtr
+    If usPsThreadType.lpBuffer = 0 Then
+        RtlInitUnicodeString usPsThreadType, StrPtr(szPsThreadType)
+    End If
+    Return MmGetSystemRoutineAddress(usPsThreadType)
+End Function
+Public Function PsJobType() As LongPtr
+    If usPsJobType.lpBuffer = 0 Then
+        RtlInitUnicodeString usPsJobType, StrPtr(szPsJobType)
+    End If
+    Return MmGetSystemRoutineAddress(usPsJobType)
+End Function
+Public Function SeTokenObjectType() As LongPtr
+    If usSeTokenObjectType.lpBuffer = 0 Then
+        RtlInitUnicodeString usSeTokenObjectType, StrPtr(szSeTokenObjectType)
+    End If
+    Return MmGetSystemRoutineAddress(usSeTokenObjectType)
+End Function
+Public Function ExDesktopObjectType() As LongPtr
+    If usExDesktopObjectType.lpBuffer = 0 Then
+        RtlInitUnicodeString usExDesktopObjectType, StrPtr(szExDesktopObjectType)
+    End If
+    Return MmGetSystemRoutineAddress(usExDesktopObjectType)
+End Function
+
+[ PackingAlignment (1) ]
+Private Type KmMsgBox
+    pText As LongPtr
+    pTitle As LongPtr
+    nType As LongPtr
+End Type
+[ Description ("Yes, this is a MsgBox implementation for kernel mode." & vbCrLf & "IMPORTANT: This must originate from a user-mode process, e.g. in the DeviceIoControl handler.") ]
+Public Function MsgBox(ByVal lpText As LongPtr, ByVal dwOptions As MessageBoxFlags, ByVal lpTitle As LongPtr) As HARDERROR_RESPONSE
+    Dim pArgs As KmMsgBox
+    Dim uText As UNICODE_STRING
+    Dim uTitle As UNICODE_STRING
+    
+    RtlInitUnicodeString uText, lpText
+    RtlInitUnicodeString uText, lpTitle
+    pArgs.pText = VarPtr(uText)
+    pArgs.pTitle = VarPtr(uTitle)
+    pArgs.nType = dwOptions
+    
+    Dim lRet As HARDERROR_RESPONSE
+    
+    ExRaiseHardError STATUS_SERVICE_NOTIFICATION Or HARDERROR_OVERRIDE_ERRORMODE, 3, &H3, pArgs, 3, lRet
+    
+    Return lRet
+End Function
+
+End Module

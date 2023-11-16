@@ -1,0 +1,17 @@
+Module modKmOpaque
+'Kernel mode opaque structures.
+'These are undocumented and often change version to version.
+
+[ Description ("Windows 10 1909 - Windows 11 22H2 (last verified, unknown in future versions.") ]
+Public Const EPROCESS_TOKEN_OFFSET_1909 = &H04B8
+[ Description ("Windows 10 1903 ONLY") ]
+Public Const EPROCESS_TOKEN_OFFSET_1903 = &H0360
+[ Description ("Windows 10 initial release (Theshold) - Windows 10 1809 (Redstone 5)") ]
+Public Const EPROCESS_TOKEN_OFFSET_10 = &H0358
+[ Description ("Windows 7 64bit ONLY") ]
+Public Const EPROCESS_TOKEN_OFFSET_7 = &H0208
+[ Description ("Windows 7 32bit ONLY") ]
+Public Const EPROCESS_TOKEN_OFFSET_7x86 = &HF8
+    
+
+End Module

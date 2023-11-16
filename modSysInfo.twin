@@ -1,0 +1,3355 @@
+Module modSysInfo
+
+    Public Enum OBJECT_INFORMATION_CLASS
+        ObjectBasicInformation = 0
+        ObjectNameInformation
+        ObjectTypeInformation
+        ObjectTypesInformation
+        ObjectHandleFlagInformation
+        ObjectSessionInformation
+        ObjectSessionObjectInformation
+    End Enum
+
+    Public Type OBJECT_BASIC_INFORMATION
+        Attributes As ObjectAttributeValues
+        GrantedAccess As Long
+        HandleCount As Long
+        PointerCount As Long
+        PagedPoolCharge As Long
+        NonPagedPoolCharge As Long
+        Reserved(2) As Long
+        NameInfoSize As Long
+        TypeInfoSize As Long
+        SecurityDescriptorSize As Long
+        CreationTime As LongLong
+    End Type
+
+    Public Type OBJECT_NAME_INFORMATION
+        Name As UNICODE_STRING
+    End Type
+
+    Public Type GENERIC_MAPPING
+        GenericRead As Long
+        GenericWrite As Long
+        GenericExecute As Long
+        GenericAll As Long
+    End Type
+
+    [ Description ("This structure is followed by the string described by TypeName.") ]
+    Public Type OBJECT_TYPE_INFORMATION
+       TypeName                    As UNICODE_STRING   '
+       TotalNumberOfObjects        As Long    'ULONG   '
+       TotalNumberOfHandles        As Long    'ULONG   '
+       TotalPagedPoolUsage         As Long    'ULONG   '
+       TotalNonPagedPoolUsage      As Long    'ULONG   '
+       TotalNamePoolUsage          As Long    'ULONG   '
+       TotalHandleTableUsage       As Long    'ULONG   '
+       HighWaterNumberOfObjects    As Long    'ULONG   '
+       HighWaterNumberOfHandles    As Long    'ULONG   '
+       HighWaterPagedPoolUsage     As Long    'ULONG   '
+       HighWaterNonPagedPoolUsage  As Long    'ULONG   '
+       HighWaterNamePoolUsage      As Long    'ULONG   '
+       HighWaterHandleTableUsage   As Long    'ULONG   '
+       InvalidAttributes           As Long    'ULONG   '
+       GenericMapping              As GENERIC_MAPPING  '
+       ValidAccessMask             As Long    'ULONG   '
+       SecurityRequired            As Byte    'BOOLEAN '
+       MaintainHandleCount         As Byte    'BOOLEAN '
+       MaintainTypeList            As Integer
+       PoolType                    As Long    'ULONG   '
+       DefaultPagedPoolCharge      As Long    'ULONG   '
+       DefaultNonPagedPoolCharge   As Long    'ULONG   ' total 22 x ULONG
+    End Type
+
+    Public Type OBJECT_DIRECTORY_INFORMATION
+        Name As UNICODE_STRING
+        TypeName As UNICODE_STRING
+    End Type
+
+    Public Type OBJECT_HANDLE_FLAG_INFORMATION
+        Inherit As Byte
+        ProtectFromClose As Byte
+    End Type
+
+
+    Public Enum DuplicateObjectOptions
+        DUPLICATE_CLOSE_SOURCE = &H00000001
+        DUPLICATE_SAME_ACCESS = &H00000002
+        DUPLICATE_SAME_ATTRIBUTES = &H00000004
+    End Enum
+    
+    Public Enum SYSTEM_INFORMATION_CLASS
+        SystemBasicInformation' // q: SYSTEM_BASIC_INFORMATION
+        SystemProcessorInformation' // q: SYSTEM_PROCESSOR_INFORMATION
+        SystemPerformanceInformation' // q: SYSTEM_PERFORMANCE_INFORMATION
+        SystemTimeOfDayInformation' // q: SYSTEM_TIMEOFDAY_INFORMATION
+        SystemPathInformation' // not implemented
+        SystemProcessInformation' // q: SYSTEM_PROCESS_INFORMATION
+        SystemCallCountInformation' // q: SYSTEM_CALL_COUNT_INFORMATION
+        SystemDeviceInformation' // q: SYSTEM_DEVICE_INFORMATION
+        SystemProcessorPerformanceInformation' // q: SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION
+        SystemFlagsInformation' // q: SYSTEM_FLAGS_INFORMATION
+        SystemCallTimeInformation' // not implemented // SYSTEM_CALL_TIME_INFORMATION // 10
+        SystemModuleInformation' // q: RTL_PROCESS_MODULES
+        SystemLocksInformation' // q: RTL_PROCESS_LOCKS
+        SystemStackTraceInformation' // q: RTL_PROCESS_BACKTRACES
+        SystemPagedPoolInformation' // not implemented
+        SystemNonPagedPoolInformation' // not implemented
+        SystemHandleInformation' // q: SYSTEM_HANDLE_INFORMATION
+        SystemObjectInformation' // q: SYSTEM_OBJECTTYPE_INFORMATION mixed with SYSTEM_OBJECT_INFORMATION
+        SystemPageFileInformation' // q: SYSTEM_PAGEFILE_INFORMATION
+        SystemVdmInstemulInformation' // q: SYSTEM_VDM_INSTEMUL_INFO
+        SystemVdmBopInformation' // not implemented // 20
+        SystemFileCacheInformation' // q: SYSTEM_FILECACHE_INFORMATION; s (requires SeIncreaseQuotaPrivilege) (info for WorkingSetTypeSystemCache)
+        SystemPoolTagInformation' // q: SYSTEM_POOLTAG_INFORMATION
+        SystemInterruptInformation' // q: SYSTEM_INTERRUPT_INFORMATION
+        SystemDpcBehaviorInformation' // q: SYSTEM_DPC_BEHAVIOR_INFORMATION; s: SYSTEM_DPC_BEHAVIOR_INFORMATION (requires SeLoadDriverPrivilege)
+        SystemFullMemoryInformation' // not implemented // SYSTEM_MEMORY_USAGE_INFORMATION
+        SystemLoadGdiDriverInformation' // s (kernel-mode only)
+        SystemUnloadGdiDriverInformation' // s (kernel-mode only)
+        SystemTimeAdjustmentInformation' // q: SYSTEM_QUERY_TIME_ADJUST_INFORMATION; s: SYSTEM_SET_TIME_ADJUST_INFORMATION (requires SeSystemtimePrivilege)
+        SystemSummaryMemoryInformation' // not implemented // SYSTEM_MEMORY_USAGE_INFORMATION
+        SystemMirrorMemoryInformation' // s (requires license value "Kernel-MemoryMirroringSupported") (requires SeShutdownPrivilege) // 30
+        SystemPerformanceTraceInformation' // q; s: (type depends on EVENT_TRACE_INFORMATION_CLASS)
+        SystemObsolete0' // not implemented
+        SystemExceptionInformation' // q: SYSTEM_EXCEPTION_INFORMATION
+        SystemCrashDumpStateInformation' // s: SYSTEM_CRASH_DUMP_STATE_INFORMATION (requires SeDebugPrivilege)
+        SystemKernelDebuggerInformation' // q: SYSTEM_KERNEL_DEBUGGER_INFORMATION
+        SystemContextSwitchInformation' // q: SYSTEM_CONTEXT_SWITCH_INFORMATION
+        SystemRegistryQuotaInformation' // q: SYSTEM_REGISTRY_QUOTA_INFORMATION; s (requires SeIncreaseQuotaPrivilege)
+        SystemExtendServiceTableInformation' // s (requires SeLoadDriverPrivilege) // loads win32k only
+        SystemPrioritySeperation' // s (requires SeTcbPrivilege)
+        SystemVerifierAddDriverInformation' // s (requires SeDebugPrivilege) // 40
+        SystemVerifierRemoveDriverInformation' // s (requires SeDebugPrivilege)
+        SystemProcessorIdleInformation' // q: SYSTEM_PROCESSOR_IDLE_INFORMATION
+        SystemLegacyDriverInformation' // q: SYSTEM_LEGACY_DRIVER_INFORMATION
+        SystemCurrentTimeZoneInformation' // q; s: RTL_TIME_ZONE_INFORMATION
+        SystemLookasideInformation' // q: SYSTEM_LOOKASIDE_INFORMATION
+        SystemTimeSlipNotification' // s: HANDLE (NtCreateEvent) (requires SeSystemtimePrivilege)
+        SystemSessionCreate' // not implemented
+        SystemSessionDetach' // not implemented
+        SystemSessionInformation' // not implemented (SYSTEM_SESSION_INFORMATION)
+        SystemRangeStartInformation' // q: SYSTEM_RANGE_START_INFORMATION // 50
+        SystemVerifierInformation' // q: SYSTEM_VERIFIER_INFORMATION; s (requires SeDebugPrivilege)
+        SystemVerifierThunkExtend' // s (kernel-mode only)
+        SystemSessionProcessInformation' // q: SYSTEM_SESSION_PROCESS_INFORMATION
+        SystemLoadGdiDriverInSystemSpace' // s: SYSTEM_GDI_DRIVER_INFORMATION (kernel-mode only) (same as SystemLoadGdiDriverInformation)
+        SystemNumaProcessorMap' // q: SYSTEM_NUMA_INFORMATION
+        SystemPrefetcherInformation' // q; s: PREFETCHER_INFORMATION // PfSnQueryPrefetcherInformation
+        SystemExtendedProcessInformation' // q: SYSTEM_PROCESS_INFORMATION
+        SystemRecommendedSharedDataAlignment' // q: ULONG // KeGetRecommendedSharedDataAlignment
+        SystemComPlusPackage' // q; s: ULONG
+        SystemNumaAvailableMemory' // q: SYSTEM_NUMA_INFORMATION // 60
+        SystemProcessorPowerInformation' // q: SYSTEM_PROCESSOR_POWER_INFORMATION
+        SystemEmulationBasicInformation' // q: SYSTEM_BASIC_INFORMATION
+        SystemEmulationProcessorInformation' // q: SYSTEM_PROCESSOR_INFORMATION
+        SystemExtendedHandleInformation' // q: SYSTEM_HANDLE_INFORMATION_EX
+        SystemLostDelayedWriteInformation' // q: ULONG
+        SystemBigPoolInformation' // q: SYSTEM_BIGPOOL_INFORMATION
+        SystemSessionPoolTagInformation' // q: SYSTEM_SESSION_POOLTAG_INFORMATION
+        SystemSessionMappedViewInformation' // q: SYSTEM_SESSION_MAPPED_VIEW_INFORMATION
+        SystemHotpatchInformation' // q; s: SYSTEM_HOTPATCH_CODE_INFORMATION
+        SystemObjectSecurityMode' // q: ULONG // 70
+        SystemWatchdogTimerHandler' // s: SYSTEM_WATCHDOG_HANDLER_INFORMATION // (kernel-mode only)
+        SystemWatchdogTimerInformation' // q: SYSTEM_WATCHDOG_TIMER_INFORMATION // (kernel-mode only)
+        SystemLogicalProcessorInformation' // q: SYSTEM_LOGICAL_PROCESSOR_INFORMATION (EX in: USHORT ProcessorGroup)
+        SystemWow64SharedInformationObsolete' // not implemented
+        SystemRegisterFirmwareTableInformationHandler' // s: SYSTEM_FIRMWARE_TABLE_HANDLER // (kernel-mode only)
+        SystemFirmwareTableInformation' // SYSTEM_FIRMWARE_TABLE_INFORMATION
+        SystemModuleInformationEx' // q: RTL_PROCESS_MODULE_INFORMATION_EX
+        SystemVerifierTriageInformation' // not implemented
+        SystemSuperfetchInformation' // q; s: SUPERFETCH_INFORMATION // PfQuerySuperfetchInformation
+        SystemMemoryListInformation' // q: SYSTEM_MEMORY_LIST_INFORMATION; s: SYSTEM_MEMORY_LIST_COMMAND (requires SeProfileSingleProcessPrivilege) // 80
+        SystemFileCacheInformationEx' // q: SYSTEM_FILECACHE_INFORMATION; s (requires SeIncreaseQuotaPrivilege) (same as SystemFileCacheInformation)
+        SystemThreadPriorityClientIdInformation' // s: SYSTEM_THREAD_CID_PRIORITY_INFORMATION (requires SeIncreaseBasePriorityPrivilege)
+        SystemProcessorIdleCycleTimeInformation' // q: SYSTEM_PROCESSOR_IDLE_CYCLE_TIME_INFORMATION[] (EX in: USHORT ProcessorGroup)
+        SystemVerifierCancellationInformation' // SYSTEM_VERIFIER_CANCELLATION_INFORMATION // name:wow64:whNT32QuerySystemVerifierCancellationInformation
+        SystemProcessorPowerInformationEx' // not implemented
+        SystemRefTraceInformation' // q; s: SYSTEM_REF_TRACE_INFORMATION // ObQueryRefTraceInformation
+        SystemSpecialPoolInformation' // q; s: SYSTEM_SPECIAL_POOL_INFORMATION (requires SeDebugPrivilege) // MmSpecialPoolTag' then MmSpecialPoolCatchOverruns != 0
+        SystemProcessIdInformation' // q: SYSTEM_PROCESS_ID_INFORMATION
+        SystemErrorPortInformation' // s (requires SeTcbPrivilege)
+        SystemBootEnvironmentInformation' // q: SYSTEM_BOOT_ENVIRONMENT_INFORMATION // 90
+        SystemHypervisorInformation' // q: SYSTEM_HYPERVISOR_QUERY_INFORMATION
+        SystemVerifierInformationEx' // q; s: SYSTEM_VERIFIER_INFORMATION_EX
+        SystemTimeZoneInformation' // q; s: RTL_TIME_ZONE_INFORMATION (requires SeTimeZonePrivilege)
+        SystemImageFileExecutionOptionsInformation' // s: SYSTEM_IMAGE_FILE_EXECUTION_OPTIONS_INFORMATION (requires SeTcbPrivilege)
+        SystemCoverageInformation' // q: COVERAGE_MODULES s: COVERAGE_MODULE_REQUEST // ExpCovQueryInformation (requires SeDebugPrivilege)
+        SystemPrefetchPatchInformation' // SYSTEM_PREFETCH_PATCH_INFORMATION
+        SystemVerifierFaultsInformation' // s: SYSTEM_VERIFIER_FAULTS_INFORMATION (requires SeDebugPrivilege)
+        SystemSystemPartitionInformation' // q: SYSTEM_SYSTEM_PARTITION_INFORMATION
+        SystemSystemDiskInformation' // q: SYSTEM_SYSTEM_DISK_INFORMATION
+        SystemProcessorPerformanceDistribution' // q: SYSTEM_PROCESSOR_PERFORMANCE_DISTRIBUTION // 100
+        SystemNumaProximityNodeInformation' // q; s: SYSTEM_NUMA_PROXIMITY_MAP
+        SystemDynamicTimeZoneInformation' // q; s: RTL_DYNAMIC_TIME_ZONE_INFORMATION (requires SeTimeZonePrivilege)
+        SystemCodeIntegrityInformation' // q: SYSTEM_CODEINTEGRITY_INFORMATION // SeCodeIntegrityQueryInformation
+        SystemProcessorMicrocodeUpdateInformation' // s: SYSTEM_PROCESSOR_MICROCODE_UPDATE_INFORMATION
+        SystemProcessorBrandString' // q: CHAR[] // HaliQuerySystemInformation -> HalpGetProcessorBrandString' info class 23
+        SystemVirtualAddressInformation' // q: SYSTEM_VA_LIST_INFORMATION[]; s: SYSTEM_VA_LIST_INFORMATION[] (requires SeIncreaseQuotaPrivilege) // MmQuerySystemVaInformation
+        SystemLogicalProcessorAndGroupInformation' // q: SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX // since WIN7 // KeQueryLogicalProcessorRelationship
+        SystemProcessorCycleTimeInformation' // q: SYSTEM_PROCESSOR_CYCLE_TIME_INFORMATION[] (EX in: USHORT ProcessorGroup)
+        SystemStoreInformation' // q; s: SYSTEM_STORE_INFORMATION (requires SeProfileSingleProcessPrivilege) // SmQueryStoreInformation
+        SystemRegistryAppendString' // s: SYSTEM_REGISTRY_APPEND_STRING_PARAMETERS // 110
+        SystemAitSamplingValue' // s: ULONG (requires SeProfileSingleProcessPrivilege)
+        SystemVhdBootInformation' // q: SYSTEM_VHD_BOOT_INFORMATION
+        SystemCpuQuotaInformation' // q; s: PS_CPU_QUOTA_QUERY_INFORMATION
+        SystemNativeBasicInformation' // q: SYSTEM_BASIC_INFORMATION
+        SystemErrorPortTimeouts' // SYSTEM_ERROR_PORT_TIMEOUTS
+        SystemLowPriorityIoInformation' // q: SYSTEM_LOW_PRIORITY_IO_INFORMATION
+        SystemTpmBootEntropyInformation' // q: TPM_BOOT_ENTROPY_NT_RESULT // ExQueryTpmBootEntropyInformation
+        SystemVerifierCountersInformation' // q: SYSTEM_VERIFIER_COUNTERS_INFORMATION
+        SystemPagedPoolInformationEx' // q: SYSTEM_FILECACHE_INFORMATION; s (requires SeIncreaseQuotaPrivilege) (info for WorkingSetTypePagedPool)
+        SystemSystemPtesInformationEx' // q: SYSTEM_FILECACHE_INFORMATION; s (requires SeIncreaseQuotaPrivilege) (info for WorkingSetTypeSystemPtes) // 120
+        SystemNodeDistanceInformation'
+        SystemAcpiAuditInformation' // q: SYSTEM_ACPI_AUDIT_INFORMATION // HaliQuerySystemInformation -> HalpAuditQueryResults' info class 26
+        SystemBasicPerformanceInformation' // q: SYSTEM_BASIC_PERFORMANCE_INFORMATION // name:wow64:whNtQuerySystemInformation_SystemBasicPerformanceInformation
+        SystemQueryPerformanceCounterInformation' // q: SYSTEM_QUERY_PERFORMANCE_COUNTER_INFORMATION // since WIN7 SP1
+        SystemSessionBigPoolInformation' // q: SYSTEM_SESSION_POOLTAG_INFORMATION // since WIN8
+        SystemBootGraphicsInformation' // q; s: SYSTEM_BOOT_GRAPHICS_INFORMATION (kernel-mode only)
+        SystemScrubPhysicalMemoryInformation' // q; s: MEMORY_SCRUB_INFORMATION
+        SystemBadPageInformation'
+        SystemProcessorProfileControlArea' // q; s: SYSTEM_PROCESSOR_PROFILE_CONTROL_AREA
+        SystemCombinePhysicalMemoryInformation' // s: MEMORY_COMBINE_INFORMATION' MEMORY_COMBINE_INFORMATION_EX' MEMORY_COMBINE_INFORMATION_EX2 // 130
+        SystemEntropyInterruptTimingInformation' // q; s: SYSTEM_ENTROPY_TIMING_INFORMATION
+        SystemConsoleInformation' // q: SYSTEM_CONSOLE_INFORMATION
+        SystemPlatformBinaryInformation' // q: SYSTEM_PLATFORM_BINARY_INFORMATION (requires SeTcbPrivilege)
+        SystemPolicyInformation' // q: SYSTEM_POLICY_INFORMATION
+        SystemHypervisorProcessorCountInformation' // q: SYSTEM_HYPERVISOR_PROCESSOR_COUNT_INFORMATION
+        SystemDeviceDataInformation' // q: SYSTEM_DEVICE_DATA_INFORMATION
+        SystemDeviceDataEnumerationInformation' // q: SYSTEM_DEVICE_DATA_INFORMATION
+        SystemMemoryTopologyInformation' // q: SYSTEM_MEMORY_TOPOLOGY_INFORMATION
+        SystemMemoryChannelInformation' // q: SYSTEM_MEMORY_CHANNEL_INFORMATION
+        SystemBootLogoInformation' // q: SYSTEM_BOOT_LOGO_INFORMATION // 140
+        SystemProcessorPerformanceInformationEx' // q: SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION_EX // since WINBLUE
+        SystemCriticalProcessErrorLogInformation'
+        SystemSecureBootPolicyInformation' // q: SYSTEM_SECUREBOOT_POLICY_INFORMATION
+        SystemPageFileInformationEx' // q: SYSTEM_PAGEFILE_INFORMATION_EX
+        SystemSecureBootInformation' // q: SYSTEM_SECUREBOOT_INFORMATION
+        SystemEntropyInterruptTimingRawInformation'
+        SystemPortableWorkspaceEfiLauncherInformation' // q: SYSTEM_PORTABLE_WORKSPACE_EFI_LAUNCHER_INFORMATION
+        SystemFullProcessInformation' // q: SYSTEM_PROCESS_INFORMATION with SYSTEM_PROCESS_INFORMATION_EXTENSION (requires admin)
+        SystemKernelDebuggerInformationEx' // q: SYSTEM_KERNEL_DEBUGGER_INFORMATION_EX
+        SystemBootMetadataInformation' // 150
+        SystemSoftRebootInformation' // q: ULONG
+        SystemElamCertificateInformation' // s: SYSTEM_ELAM_CERTIFICATE_INFORMATION
+        SystemOfflineDumpConfigInformation' // q: OFFLINE_CRASHDUMP_CONFIGURATION_TABLE_V2
+        SystemProcessorFeaturesInformation' // q: SYSTEM_PROCESSOR_FEATURES_INFORMATION
+        SystemRegistryReconciliationInformation' // s: NULL (requires admin) (flushes registry hives)
+        SystemEdidInformation' // q: SYSTEM_EDID_INFORMATION
+        SystemManufacturingInformation' // q: SYSTEM_MANUFACTURING_INFORMATION // since THRESHOLD
+        SystemEnergyEstimationConfigInformation' // q: SYSTEM_ENERGY_ESTIMATION_CONFIG_INFORMATION
+        SystemHypervisorDetailInformation' // q: SYSTEM_HYPERVISOR_DETAIL_INFORMATION
+        SystemProcessorCycleStatsInformation' // q: SYSTEM_PROCESSOR_CYCLE_STATS_INFORMATION // 160
+        SystemVmGenerationCountInformation'
+        SystemTrustedPlatformModuleInformation' // q: SYSTEM_TPM_INFORMATION
+        SystemKernelDebuggerFlags' // SYSTEM_KERNEL_DEBUGGER_FLAGS
+        SystemCodeIntegrityPolicyInformation' // q: SYSTEM_CODEINTEGRITYPOLICY_INFORMATION
+        SystemIsolatedUserModeInformation' // q: SYSTEM_ISOLATED_USER_MODE_INFORMATION
+        SystemHardwareSecurityTestInterfaceResultsInformation'
+        SystemSingleModuleInformation' // q: SYSTEM_SINGLE_MODULE_INFORMATION
+        SystemAllowedCpuSetsInformation'
+        SystemVsmProtectionInformation' // q: SYSTEM_VSM_PROTECTION_INFORMATION (previously SystemDmaProtectionInformation)
+        SystemInterruptCpuSetsInformation' // q: SYSTEM_INTERRUPT_CPU_SET_INFORMATION // 170
+        SystemSecureBootPolicyFullInformation' // q: SYSTEM_SECUREBOOT_POLICY_FULL_INFORMATION
+        SystemCodeIntegrityPolicyFullInformation'
+        SystemAffinitizedInterruptProcessorInformation' // (requires SeIncreaseBasePriorityPrivilege)
+        SystemRootSiloInformation' // q: SYSTEM_ROOT_SILO_INFORMATION
+        SystemCpuSetInformation' // q: SYSTEM_CPU_SET_INFORMATION // since THRESHOLD2
+        SystemCpuSetTagInformation' // q: SYSTEM_CPU_SET_TAG_INFORMATION
+        SystemWin32WerStartCallout'
+        SystemSecureKernelProfileInformation' // q: SYSTEM_SECURE_KERNEL_HYPERGUARD_PROFILE_INFORMATION
+        SystemCodeIntegrityPlatformManifestInformation' // q: SYSTEM_SECUREBOOT_PLATFORM_MANIFEST_INFORMATION // since REDSTONE
+        SystemInterruptSteeringInformation' // SYSTEM_INTERRUPT_STEERING_INFORMATION_INPUT // 180
+        SystemSupportedProcessorArchitectures' // p: in opt: HANDLE' out: SYSTEM_SUPPORTED_PROCESSOR_ARCHITECTURES_INFORMATION[] // NtQuerySystemInformationEx
+        SystemMemoryUsageInformation' // q: SYSTEM_MEMORY_USAGE_INFORMATION
+        SystemCodeIntegrityCertificateInformation' // q: SYSTEM_CODEINTEGRITY_CERTIFICATE_INFORMATION
+        SystemPhysicalMemoryInformation' // q: SYSTEM_PHYSICAL_MEMORY_INFORMATION // since REDSTONE2
+        SystemControlFlowTransition'
+        SystemKernelDebuggingAllowed' // s: ULONG
+        SystemActivityModerationExeState' // SYSTEM_ACTIVITY_MODERATION_EXE_STATE
+        SystemActivityModerationUserSettings' // SYSTEM_ACTIVITY_MODERATION_USER_SETTINGS
+        SystemCodeIntegrityPoliciesFullInformation'
+        SystemCodeIntegrityUnlockInformation' // SYSTEM_CODEINTEGRITY_UNLOCK_INFORMATION // 190
+        SystemIntegrityQuotaInformation'
+        SystemFlushInformation' // q: SYSTEM_FLUSH_INFORMATION
+        SystemProcessorIdleMaskInformation' // q: ULONG_PTR // since REDSTONE3
+        SystemSecureDumpEncryptionInformation'
+        SystemWriteConstraintInformation' // SYSTEM_WRITE_CONSTRAINT_INFORMATION
+        SystemKernelVaShadowInformation' // SYSTEM_KERNEL_VA_SHADOW_INFORMATION
+        SystemHypervisorSharedPageInformation' // SYSTEM_HYPERVISOR_SHARED_PAGE_INFORMATION // since REDSTONE4
+        SystemFirmwareBootPerformanceInformation'
+        SystemCodeIntegrityVerificationInformation' // SYSTEM_CODEINTEGRITYVERIFICATION_INFORMATION
+        SystemFirmwarePartitionInformation' // SYSTEM_FIRMWARE_PARTITION_INFORMATION // 200
+        SystemSpeculationControlInformation' // SYSTEM_SPECULATION_CONTROL_INFORMATION // (CVE-2017-5715) REDSTONE3 and above.
+        SystemDmaGuardPolicyInformation' // SYSTEM_DMA_GUARD_POLICY_INFORMATION
+        SystemEnclaveLaunchControlInformation' // SYSTEM_ENCLAVE_LAUNCH_CONTROL_INFORMATION
+        SystemWorkloadAllowedCpuSetsInformation' // SYSTEM_WORKLOAD_ALLOWED_CPU_SET_INFORMATION // since REDSTONE5
+        SystemCodeIntegrityUnlockModeInformation'
+        SystemLeapSecondInformation' // SYSTEM_LEAP_SECOND_INFORMATION
+        SystemFlags2Information' // q: SYSTEM_FLAGS_INFORMATION
+        SystemSecurityModelInformation' // SYSTEM_SECURITY_MODEL_INFORMATION // since 19H1
+        SystemCodeIntegritySyntheticCacheInformation'
+        SystemFeatureConfigurationInformation' // SYSTEM_FEATURE_CONFIGURATION_INFORMATION // since 20H1 // 210
+        SystemFeatureConfigurationSectionInformation' // SYSTEM_FEATURE_CONFIGURATION_SECTIONS_INFORMATION
+        SystemFeatureUsageSubscriptionInformation' // SYSTEM_FEATURE_USAGE_SUBSCRIPTION_DETAILS
+        SystemSecureSpeculationControlInformation' // SECURE_SPECULATION_CONTROL_INFORMATION
+        SystemSpacesBootInformation' // since 20H2
+        SystemFwRamdiskInformation' // SYSTEM_FIRMWARE_RAMDISK_INFORMATION
+        SystemWheaIpmiHardwareInformation'
+        SystemDifSetRuleClassInformation'
+        SystemDifClearRuleClassInformation'
+        SystemDifApplyPluginVerificationOnDriver'
+        SystemDifRemovePluginVerificationOnDriver' // 220
+        SystemShadowStackInformation' // SYSTEM_SHADOW_STACK_INFORMATION
+        SystemBuildVersionInformation' // SYSTEM_BUILD_VERSION_INFORMATION
+        SystemPoolLimitInformation' // SYSTEM_POOL_LIMIT_INFORMATION
+        SystemCodeIntegrityAddDynamicStore'
+        SystemCodeIntegrityClearDynamicStores'
+        SystemDifPoolTrackingInformation'
+        SystemPoolZeroingInformation' // SYSTEM_POOL_ZEROING_INFORMATION
+        SystemDpcWatchdogInformation'
+        SystemDpcWatchdogInformation2'
+        SystemSupportedProcessorArchitectures2'// q: in opt: HANDLE' out: SYSTEM_SUPPORTED_PROCESSOR_ARCHITECTURES_INFORMATION[] // NtQuerySystemInformationEx  // 230
+        SystemSingleProcessorRelationshipInformation'
+        SystemXfgCheckFailureInformation'
+        SystemIommuStateInformation' // since 11H1
+        SystemHypervisorMinrootInformation'
+        SystemHypervisorBootPagesInformation'
+        SystemPointerAuthInformation'
+        SystemSecureKernelDebuggerInformation'
+        MaxSystemInfoClass
+    End Enum
+    
+    Public Type SYSTEM_PROCESS_INFORMATION
+        NextEntryOffset As Long
+        NumberOfThreads As Long
+        'The following 48 bytes may change and are invalid on some early Windows versions:
+        WorkingSetPrivateSize As LARGE_INTEGER
+        HardFaultCount As Long
+        NumberOfThreadsHighWatermark As Long
+        CycleTime As LongLong
+        CreateTime As LARGE_INTEGER
+        UserTime As LARGE_INTEGER
+        KernelTime As LARGE_INTEGER
+        'Resume documented members
+        ImageName As UNICODE_STRING
+        BasePriority As Long
+        UniqueProcessId As Long
+        InheritedFromUniqueProcessId As LongPtr
+        HandleCount As Long
+        SessionId As Long
+        UniqueProcessKey As LongPtr
+        PeakVirtualSize As LongPtr
+        VirtualSize As LongPtr
+        PageFaultCount As Long
+        PeakWorkingSetSize As LongPtr
+        WorkingSetSize As LongPtr
+        QuotaPeakPagedPoolUsage As LongPtr
+        QuotaPagedPoolUsage As LongPtr
+        QuotaPeakNonPagedPoolUsage As LongPtr
+        QuotaNonPagedPoolUsage As LongPtr
+        PagefileUsage As LongPtr
+        PeakPagefileUsage As LongPtr
+        PrivatePageCount As LongPtr
+        ReadOperationCount As LARGE_INTEGER
+        WriteOperationCount As LARGE_INTEGER
+        OtherOperationCount As LARGE_INTEGER
+        ReadTransferCount As LARGE_INTEGER
+        WriteTransferCount As LARGE_INTEGER
+        OtherTransferCount As LARGE_INTEGER
+    End Type
+    Public Type SYSTEM_THREAD_INFORMATION
+        KernelTime As LARGE_INTEGER
+        UserTime As LARGE_INTEGER
+        CreateTime As LARGE_INTEGER
+        WaitTime As Long
+        StartAddress As LongPtr
+        ClientId As CLIENT_ID
+        Priority As Long
+        BasePriority As Long
+        ContextSwitches As Long
+        ThreadState As Long
+        WaitReason As Long
+    End Type
+    
+    
+    Public Type SYSTEM_BASIC_INFORMATION
+        Reserved As Long
+        TimerResolution As Long
+        PageSize As Long
+        NumberOfPhysicalPages As Long
+        LowestPhysicalPageNumber As Long
+        HighestPhysicalPageNumber As Long
+        AllocationGranularity As Long
+        MinimumUserModeAddress As LongPtr
+        MaximumUserModeAddress As LongPtr
+        ActiveProcessorsAffinityMask As LongPtr
+        NumberOfProcessors As Byte
+    End Type
+
+    Public Enum PROCESSOR_ARCHITECTURE
+        PROCESSOR_ARCHITECTURE_INTEL = 0
+        PROCESSOR_ARCHITECTURE_MIPS = 1
+        PROCESSOR_ARCHITECTURE_ALPHA = 2
+        PROCESSOR_ARCHITECTURE_PPC = 3
+        PROCESSOR_ARCHITECTURE_SHX = 4
+        PROCESSOR_ARCHITECTURE_ARM = 5
+        PROCESSOR_ARCHITECTURE_IA64 = 6
+        PROCESSOR_ARCHITECTURE_ALPHA64 = 7
+        PROCESSOR_ARCHITECTURE_MSIL = 8
+        PROCESSOR_ARCHITECTURE_AMD64 = 9
+        PROCESSOR_ARCHITECTURE_IA32_ON_WIN64 = 10
+        PROCESSOR_ARCHITECTURE_NEUTRAL = 11
+        PROCESSOR_ARCHITECTURE_ARM64 = 12
+        PROCESSOR_ARCHITECTURE_ARM32_ON_WIN64 = 13
+        PROCESSOR_ARCHITECTURE_IA32_ON_ARM64 = 14
+    End Enum
+    Public Type SYSTEM_PROCESSOR_INFORMATION
+        ProcessorArchitecture As Integer /* PROCESSOR_ARCHITECTURE */
+        ProcessorLevel As Integer
+        ProcessorRevision As Integer
+        MaximumProcessors As Integer 'Win7+ only
+        ProcessorFeatureBits As Long
+    End Type
+
+    Public Type SYSTEM_PERFORMANCE_INFORMATION
+        IdleProcessTime As LARGE_INTEGER
+        IoReadTransferCount As LARGE_INTEGER
+        IoWriteTransferCount As LARGE_INTEGER
+        IoOtherTransferCount As LARGE_INTEGER
+        IoReadOperationCount As Long
+        IoWriteOperationCount As Long
+        IoOtherOperationCount As Long
+        AvailablePages As Long
+        CommittedPages As Long
+        CommitLimit As Long
+        PeakCommitment As Long
+        PageFaultCount As Long
+        CopyOnWriteCount As Long
+        TransitionCount As Long
+        CacheTransitionCount As Long
+        DemandZeroCount As Long
+        PageReadCount As Long
+        PageReadIoCount As Long
+        CacheReadCount As Long
+        CacheIoCount As Long
+        DirtyPagesWriteCount As Long
+        DirtyWriteIoCount As Long
+        MappedPagesWriteCount As Long
+        MappedWriteIoCount As Long
+        PagedPoolPages As Long
+        NonPagedPoolPages As Long
+        PagedPoolAllocs As Long
+        PagedPoolFrees As Long
+        NonPagedPoolAllocs As Long
+        NonPagedPoolFrees As Long
+        FreeSystemPtes As Long
+        ResidentSystemCodePage As Long
+        TotalSystemDriverPages As Long
+        TotalSystemCodePages As Long
+        NonPagedPoolLookasideHits As Long
+        PagedPoolLookasideHits As Long
+        AvailablePagedPoolPages As Long
+        ResidentSystemCachePage As Long
+        ResidentPagedPoolPage As Long
+        ResidentSystemDriverPage As Long
+        CcFastReadNoWait As Long
+        CcFastReadWait As Long
+        CcFastReadResourceMiss As Long
+        CcFastReadNotPossible As Long
+        CcFastMdlReadNoWait As Long
+        CcFastMdlReadWait As Long
+        CcFastMdlReadResourceMiss As Long
+        CcFastMdlReadNotPossible As Long
+        CcMapDataNoWait As Long
+        CcMapDataWait As Long
+        CcMapDataNoWaitMiss As Long
+        CcMapDataWaitMiss As Long
+        CcPinMappedDataCount As Long
+        CcPinReadNoWait As Long
+        CcPinReadWait As Long
+        CcPinReadNoWaitMiss As Long
+        CcPinReadWaitMiss As Long
+        CcCopyReadNoWait As Long
+        CcCopyReadWait As Long
+        CcCopyReadNoWaitMiss As Long
+        CcCopyReadWaitMiss As Long
+        CcMdlReadNoWait As Long
+        CcMdlReadWait As Long
+        CcMdlReadNoWaitMiss As Long
+        CcMdlReadWaitMiss As Long
+        CcReadAheadIos As Long
+        CcLazyWriteIos As Long
+        CcLazyWritePages As Long
+        CcDataFlushes As Long
+        CcDataPages As Long
+        ContextSwitches As Long
+        FirstLevelTbFills As Long
+        SecondLevelTbFills As Long
+        SystemCalls As Long
+        CcTotalDirtyPages As LongLong 'Windows 10 only
+        CcDirtyPageThreshold As LongLong 'Windows 10 only
+        ResidentAvailablePages As LongLong 'Windows 10 only
+        SharedCommittedPages As LongLong 'Windows 10 only
+    End Type
+
+    Public Type SYSTEM_TIMEOFDAY_INFORMATION
+        BootTime As LARGE_INTEGER
+        CurrentTime As LARGE_INTEGER
+        TimeZoneBias As LARGE_INTEGER
+        TimeZoneId As Long
+        Reserved As Long
+        BootTimeBias As LongLong
+        SleepTimeBias As LongLong
+    End Type
+
+    Public Type SYSTEM_CALL_COUNT_INFORMATION
+        Length As Long
+        NumberOfTables As Long
+    End Type
+
+    Public Type SYSTEM_DEVICE_INFORMATION
+        NumberOfDisks As Long
+        NumberOfFloppies As Long
+        NumberOfCdRoms As Long
+        NumberOfTapes As Long
+        NumberOfSerialPorts As Long
+        NumberOfParallelPorts As Long
+    End Type
+
+    Public Type SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION
+        IdleTime As LARGE_INTEGER
+        KernelTime As LARGE_INTEGER
+        UserTime As LARGE_INTEGER
+        DpcTime As LARGE_INTEGER
+        InterruptTime As LARGE_INTEGER
+        InterruptCount As Long
+    End Type
+
+    Public Type SYSTEM_FLAGS_INFORMATION
+        Flags As NTGLB_Flags
+    End Type
+
+    [ Description ("WARNING: This structure cannot be used as-is directly due to SAFEARRAY considerations. Copy count and array separately.") ]
+    Public Type SYSTEM_CALL_TIME_INFORMATION
+        Length As Long
+        TotalCalls As Long
+        'TimeOfCalls() As LARGE_INTEGER
+    End Type
+
+    Public Enum LDR_DATA_TABLE_FLAGS
+        LDRP_PACKAGED_BINARY = &H00000001
+        LDRP_MARKED_FOR_REMOVAL = &H00000002
+        LDRP_IMAGE_DLL = &H00000004
+        LDRP_LOAD_NOTIFICATIONS_SENT = &H00000008
+        LDRP_TELEMETRY_ENTRY_PROCESSED = &H00000010
+        LDRP_PROCESS_STATIC_IMPORT = &H00000020
+        LDRP_IN_LEGACY_LISTS = &H00000040
+        LDRP_IN_INDEXES = &H00000080
+        LDRP_SHIM_DLL = &H00000100
+        LDRP_IN_EXCEPTION_TABLE = &H00000200
+        LDRP_LOAD_IN_PROGRESS = &H00001000
+        LDRP_LOAD_CONFIG_PROCESSED = &H00002000
+        LDRP_ENTRY_PROCESSED = &H00004000
+        LDRP_PROTECT_DELAY_LOAD = &H00008000&
+        LDRP_DONT_CALL_FOR_THREADS = &H00040000
+        LDRP_PROCESS_ATTACH_CALLED = &H00080000
+        LDRP_PROCESS_ATTACH_FAILED = &H00100000
+        LDRP_COR_DEFERRED_VALIDATE = &H00200000
+        LDRP_COR_IMAGE = &H00400000
+        LDRP_DONT_RELOCATE = &H00800000
+        LDRP_COR_IL_ONLY = &H01000000
+        LDRP_CHPE_IMAGE = &H02000000
+        LDRP_CHPE_EMULATOR_IMAGE = &H04000000
+        LDRP_REDIRECTED = &H10000000
+        LDRP_COMPAT_DATABASE_PROCESSED = &H80000000
+    End Enum
+
+    [ Description ("WARNING: This structure cannot be used as-is directly due to SAFEARRAY considerations. Copy count and array separately.") ]
+    Public Type RTL_PROCESS_MODULES
+        NumberOfModules As Long
+        Modules() As RTL_PROCESS_MODULE_INFORMATION
+    End Type
+    Public Type RTL_PROCESS_MODULE_INFORMATION
+        Section As LongPtr
+        MappedBase As LongPtr
+        ImageBase As LongPtr
+        ImageSize As Long
+        Flags As LDR_DATA_TABLE_FLAGS
+        LoadOrderIndex As Integer
+        InitOrderIndex As Integer
+        LoadCount As Integer
+        OffsetToFileName As Integer
+        FullPathName(0 To 255) As Byte
+    End Type
+
+    Public Type RTL_PROCESS_LOCK_INFORMATION
+        Address As LongPtr
+        Type As Integer 'Always 1
+        CreatorBackTraceIndex As Integer
+        OwningThread As LongPtr
+        LockCount As Long
+        ContentionCount As Long
+        EntryCount As Long
+        RecursionCount As Long
+        NumberOfWaitingShared As Long
+        NumberOfWaitingExclusive As Long
+    End Type
+    [ Description ("WARNING: This structure cannot be used as-is directly due to SAFEARRAY considerations. Copy count and array separately.") ]
+    Public Type RTL_PROCESS_LOCKS
+        NumberOfLocks As Long
+        Locks() As RTL_PROCESS_LOCK_INFORMATION
+    End Type
+
+    Public Type RTL_PROCESS_BACKTRACE_INFORMATION
+        SymbolicBackTrace As LongPtr
+        TraceCount As Long
+        Index As Integer
+        Depth As Integer
+        BackTrace(0 To 31) As LongPtr
+    End Type
+    [ Description ("WARNING: This structure cannot be used as-is directly due to SAFEARRAY considerations. Copy count and array separately.") ]
+    Public Type RTL_PROCESS_BACKTRACES
+        CommittedMemory As Long
+        ReservedMemory As Long
+        NumberOfBackTraceLookups As Long
+        NumberOfBackTraces As Long
+        BackTraces() As RTL_PROCESS_BACKTRACE_INFORMATION
+    End Type
+
+    Public Type SYSTEM_HANDLE_TABLE_ENTRY_INFO
+        UniqueProcessId As Integer
+        CreatorBackTraceIndex As Integer
+        ObjectTypeIndex As Byte
+        HandleAttributes As Byte
+        HandleValue As Integer
+        Object As LongPtr
+        GrantedAccess As Long
+    End Type
+    [ Description ("WARNING: This structure cannot be used as-is directly due to SAFEARRAY considerations. Copy count and array separately.") ]
+    Public Type SYSTEM_HANDLE_INFORMATION
+        NumberOfHandles As Long
+        Handles() As SYSTEM_HANDLE_TABLE_ENTRY_INFO
+    End Type
+
+    Public Enum OB_OBJECT_FLAGS
+        OB_FLAG_NEW_OBJECT = &H01
+        OB_FLAG_KERNEL_OBJECT = &H02
+        OB_FLAG_KERNEL_ONLY_ACCESS = &H04
+        OB_FLAG_EXCLUSIVE_OBJECT = &H08
+        OB_FLAG_PERMANENT_OBJECT = &H10
+        OB_FLAG_DEFAULT_SECURITY_QUOTA = &H20
+        OB_FLAG_SINGLE_HANDLE_ENTRY = &H40
+        OB_FLAG_DELETED_INLINE = &H80
+    End Enum
+    ' Public Enum POOL_TYPE
+    '     NonPagedPool = 0
+    '     NonPagedPoolExecute = NonPagedPool
+    '     PagedPool = 1
+    '     NonPagedPoolMustSucceed = NonPagedPool + 2
+    '     DontUseThisType = 2
+    '     NonPagedPoolCacheAligned = NonPagedPool + 4
+    '     PagedPoolCacheAligned = 3
+    '     NonPagedPoolCacheAlignedMustS = NonPagedPool + 6
+    '     MaxPoolType = 4
+    '     NonPagedPoolBase = 0
+    '     NonPagedPoolBaseMustSucceed = NonPagedPoolBase + 2
+    '     NonPagedPoolBaseCacheAligned = NonPagedPoolBase + 4
+    '     NonPagedPoolBaseCacheAlignedMustS = NonPagedPoolBase + 6
+    '     NonPagedPoolSession = 32
+    '     PagedPoolSession = NonPagedPoolSession + 1
+    '     NonPagedPoolMustSucceedSession = PagedPoolSession + 1
+    '     DontUseThisTypeSession = NonPagedPoolMustSucceedSession + 1
+    '     NonPagedPoolCacheAlignedSession = DontUseThisTypeSession + 1
+    '     PagedPoolCacheAlignedSession = NonPagedPoolCacheAlignedSession + 1
+    '     NonPagedPoolCacheAlignedMustSSession = PagedPoolCacheAlignedSession + 1
+    '     NonPagedPoolNx = 512
+    '     NonPagedPoolNxCacheAligned = NonPagedPoolNx + 4
+    '     NonPagedPoolSessionNx = NonPagedPoolNx + 32
+    ' End Enum
+    Public Type SYSTEM_OBJECTTYPE_INFORMATION
+        NextEntryOffset As Long
+        NumberOfObjects As Long
+        NumberOfHandles As Long
+        TypeIndex As Long
+        InvalidAttributes As Long
+        GenericMapping As GENERIC_MAPPING
+        ValidAccessMask As Long
+        PoolType As POOL_TYPE
+        SecurityRequired As Byte
+        WaitableObject As Byte
+        TypeName As UNICODE_STRING
+    End Type
+    Public Type SYSTEM_OBJECT_INFORMATION
+        NextEntryOffset As Long
+        Object As LongPtr
+        CreatorUniqueProcess As LongPtr
+        CreatorBackTraceIndex As Integer
+        /* [TypeHint(OB_OBJECT_FLAGS)] */ Flags As Integer
+        PointerCount As Long
+        HandleCount As Long
+        PagedPoolCharge As Long
+        NonPagedPoolCharge As Long
+        ExclusiveProcessId As LongPtr
+        SecurityDescriptor As LongPtr
+        NameInfo As OBJECT_NAME_INFORMATION
+    End Type
+
+    Public Enum SYSTEM_BOOT_ENV_FLAGS
+        DbgMenuOsSelection = &H1
+        DbgHiberBoot = &H2
+        DbgSoftBoot = &H4
+        DbgMeasuredLaunch = &H8 'Win810 1809+
+        DbgMeasuredLaunchCapable = &H10
+        DbgSystemHiveReplace = &H20
+        DbgMeasuredLaunchSmmProtections = &H40
+        DbgMeasuredLaunchSmmLevel = &H80
+    End Enum
+    Public Enum FIRMWARE_TYPE
+        FirmwareTypeUnknown
+        FirmwareTypeBios
+        FirmwareTypeUefi
+        FirmwareTypeMax
+    End Enum
+    Public Type SYSTEM_BOOT_ENVIRONMENT_INFORMATION
+        BootIdentifier As UUID
+        FirmwareType As FIRMWARE_TYPE
+        /* [ TypeHint(SYSTEM_BOOT_ENV_FLAGS) ] BootFlags As LongLong*/
+        Padding As Long
+        UnusedLongLongBytes As Long
+        BootFlags As SYSTEM_BOOT_ENV_FLAGS
+    End Type
+
+    Public Enum SYSTEM_CODEINTEGRITY_OPTIONS
+        CODEINTEGRITY_OPTION_ENABLED = &H01
+        CODEINTEGRITY_OPTION_TESTSIGN = &H02
+        CODEINTEGRITY_OPTION_UMCI_ENABLED = &H04
+        CODEINTEGRITY_OPTION_UMCI_AUDITMODE_ENABLED = &H08
+        CODEINTEGRITY_OPTION_UMCI_EXCLUSIONPATHS_ENABLED = &H10
+        CODEINTEGRITY_OPTION_TEST_BUILD = &H20
+        CODEINTEGRITY_OPTION_PREPRODUCTION_BUILD = &H40
+        CODEINTEGRITY_OPTION_DEBUGMODE_ENABLED = &H80
+        CODEINTEGRITY_OPTION_FLIGHT_BUILD = &H100
+        CODEINTEGRITY_OPTION_FLIGHTING_ENABLED = &H200
+        CODEINTEGRITY_OPTION_HVCI_KMCI_ENABLED = &H400
+        CODEINTEGRITY_OPTION_HVCI_KMCI_AUDITMODE_ENABLED = &H800
+        CODEINTEGRITY_OPTION_HVCI_KMCI_STRICTMODE_ENABLED = &H1000
+        CODEINTEGRITY_OPTION_HVCI_IUM_ENABLED = &H2000
+        CODEINTEGRITY_OPTION_WHQL_ENFORCEMENT_ENABLED = &H4000
+        CODEINTEGRITY_OPTION_WHQL_AUDITMODE_ENABLED = &H8000&
+    End Enum
+    Public Enum SYSTEM_CODEINTEGRITYPOLICY_OPTIONS
+        CODEINTEGRITYPOLICY_OPTION_ENABLED = &H01
+        CODEINTEGRITYPOLICY_OPTION_AUDIT = &H02
+        CODEINTEGRITYPOLICY_OPTION_REQUIRE_WHQL = &H04
+        CODEINTEGRITYPOLICY_OPTION_DISABLED_FLIGHTSIGNING = &H08
+        CODEINTEGRITYPOLICY_OPTION_ENABLED_UMCI = &H10
+        CODEINTEGRITYPOLICY_OPTION_ENABLED_UPDATE_POLICY_NOREBOOT = &H20
+        CODEINTEGRITYPOLICY_OPTION_ENABLED_SECURE_SETTING_POLICY = &H40
+        CODEINTEGRITYPOLICY_OPTION_ENABLED_UNSIGNED_SYSTEMINTEGRITY_POLICY = &H80
+        CODEINTEGRITYPOLICY_OPTION_DYNAMIC_CODE_POLICY_ENABLED = &H100
+        CODEINTEGRITYPOLICY_OPTION_RELOAD_POLICY_NO_REBOOT = &H10000000  ' NtSetSystemInformation reloads SiPolicy.p7b
+        CODEINTEGRITYPOLICY_OPTION_CONDITIONAL_LOCKDOWN = &H20000000
+        CODEINTEGRITYPOLICY_OPTION_NOLOCKDOWN = &H40000000
+        CODEINTEGRITYPOLICY_OPTION_LOCKDOWN = &H80000000
+    End Enum
+    Public Enum SYSTEM_CODEINTEGRITYPOLICY_HVCI_OPTIONS
+        CODEINTEGRITYPOLICY_HVCIOPTION_ENABLED = &H01
+        CODEINTEGRITYPOLICY_HVCIOPTION_STRICT = &H02
+        CODEINTEGRITYPOLICY_HVCIOPTION_DEBUG = &H04
+    End Enum
+
+    Public Type SYSTEM_CODEINTEGRITY_INFORMATION
+        Length As Long
+        CodeIntegrityOptions As SYSTEM_CODEINTEGRITY_OPTIONS
+    End Type
+    Public Type SYSTEM_CODEINTEGRITYPOLICY_INFORMATION
+        Options As SYSTEM_CODEINTEGRITYPOLICY_OPTIONS
+        HVCIOptions As SYSTEM_CODEINTEGRITYPOLICY_HVCI_OPTIONS
+        Version As LongLong
+        PolicyGuid As UUID
+    End Type
+    Public Type SYSTEM_CODEINTEGRITYVERIFICATION_INFORMATION
+        FileHandle As LongPtr
+        ImageSize As Long
+        Image As LongPtr
+    End Type
+
+    Public Type SYSTEM_BOOT_LOGO_INFORMATION
+        Flags As Long '1 if OEM set outside bootres.dll
+        BitmapOffset As Long
+    End Type
+
+    Public Type SYSTEM_PAGEFILE_INFORMATION
+        NextEntryOffset As Long
+        TotalSize As Long
+        TotalInUse As Long
+        PeakUsage As Long
+        PageFileName As UNICODE_STRING
+    End Type
+    Public Type SYSTEM_PAGEFILE_INFORMATION_EX
+        Info As SYSTEM_PAGEFILE_INFORMATION
+        MinimumSize As Long
+        MaximumSize As Long
+    End Type
+
+    Public Type SYSTEM_SECUREBOOT_INFORMATION
+        SecureBootEnabled As Byte
+        SecureBootCapable As Byte
+    End Type
+
+    Public Type SYSTEM_KERNEL_DEBUGGER_INFORMATION
+        KernelDebuggerEnabled As Byte
+        KernelDebuggerNotPresent As Byte
+    End Type
+
+    Public Enum QUOTA_LIMITS_FLAGS
+        QUOTA_LIMITS_HARDWS_MIN_ENABLE = &H00000001
+        QUOTA_LIMITS_HARDWS_MIN_DISABLE = &H00000002
+        QUOTA_LIMITS_HARDWS_MAX_ENABLE = &H00000004
+        QUOTA_LIMITS_HARDWS_MAX_DISABLE = &H00000008
+        QUOTA_LIMITS_USE_DEFAULT_LIMITS = &H00000010
+    End Enum
+    Public Type SYSTEM_FILECACHE_INFORMATION
+        CurrentSize As LongPtr
+        PeakSize As LongPtr
+        PageFaultCount As Long
+        MinimumWorkingSet As LongPtr
+        MaximumWorkingSet As LongPtr
+        CurrentSizeIncludingTransitionInPages As LongPtr
+        PeakSizeIncludingTransitionInPages As LongPtr
+        TransitionRePurposeCount As Long
+        Flags As QUOTA_LIMITS_FLAGS
+    End Type
+
+    Public Type TIME_FIELDS
+        Year As Integer
+        Month As Integer
+        Day As Integer
+        Hour As Integer
+        Minute As Integer
+        Second As Integer
+        Milliseconds As Integer
+        Weekday As Integer
+    End Type
+    Public Type RTL_TIME_ZONE_INFORMATION
+        Bias As Long
+        StandardName(0 To 31) As Integer
+        StandardDate As TIME_FIELDS
+        StandardBias As Long
+        DaylightName(0 To 31) As Integer
+        DaylightDate As TIME_FIELDS
+        DaylightBias As Long
+    End Type
+    Public Type RTL_DYNAMIC_TIME_ZONE_INFORMATION
+        tzi As RTL_TIME_ZONE_INFORMATION
+        TimeZoneKeyName(&H7F) As Integer
+        DynamicDaylightTimeDisabled As Byte
+    End Type
+
+    Public Type SYSTEM_BASIC_PERFORMANCE_INFORMATION
+        AvailablePages As LongPtr
+        CommittedPages As LongPtr
+        CommitLimit As LongPtr
+        PeakCommitment As LongPtr
+    End Type
+
+    Public Enum SYSTEM_PIXEL_FORMAT
+        SystemPixelFormatUnknown
+        SystemPixelFormatR8G8B8
+        SystemPixelFormatR8B8G8X8
+        SystemPixelFormatB8G8R8
+        SystemPixelFormatB8G8R8X8
+    End Enum
+
+    Public Type SYSTEM_BOOT_GRAPHICS_INFORMATION
+        FrameBuffer As LARGE_INTEGER
+        Width As Long
+        Height As Long
+        PixelStride As Long
+        Flags As Long
+        Format As SYSTEM_PIXEL_FORMAT
+    End Type
+
+    
+    
+    Public Enum FS_INFORMATION_CLASS
+        FileFsVolumeInformation
+        FileFsLabelInformation
+        FileFsSizeInformation
+        FileFsDeviceInformation
+        FileFsAttributeInformation
+        FileFsControlInformation
+        FileFsFullSizeInformation
+        FileFsObjectIdInformation
+        FileFsDriverPathInformation
+        FileFsVolumeFlagsInformation
+        FileFsSectorSizeInformation
+        FileFsDataCopyInformation
+        FileFsMetadataSizeInformation
+        FileFsFullSizeInformationEx
+        FileFsMaximumInformation
+    End Enum
+    Public Type FILE_FS_VOLUME_INFORMATION
+        VolumeCreationTime As LARGE_INTEGER
+        VolumeSerialNumber As Long
+        VolumeLabelLength As Long
+        SupportsObjects As Byte
+        VolumeLabel(MAX_PATH) As Integer
+    End Type
+    Public Type FILE_FS_LABEL_INFORMATION
+        VolumeLabelLength As Long
+        VolumeLabel(MAX_PATH) As Integer
+    End Type
+    Public Type FILE_FS_SIZE_INFORMATION
+        TotalAllocationUnits As LARGE_INTEGER
+        AvailableAllocationUnits As LARGE_INTEGER
+        SectorsPerAllocationUnit As Long
+        BytesPerSector As Long
+    End Type
+    ' Public Enum FILE_DEVICE_CHARACTERISTICS
+    '     FILE_REMOVABLE_MEDIA = &H00000001
+    '     FILE_READ_ONLY_DEVICE = &H00000002
+    '     FILE_FLOPPY_DISKETTE = &H00000004
+    '     FILE_WRITE_ONCE_MEDIA = &H00000008
+    '     FILE_REMOTE_DEVICE = &H00000010
+    '     FILE_DEVICE_IS_MOUNTED = &H00000020
+    '     FILE_VIRTUAL_VOLUME = &H00000040
+    '     FILE_AUTOGENERATED_DEVICE_NAME = &H00000080
+    '     FILE_DEVICE_SECURE_OPEN = &H00000100
+    '     FILE_CHARACTERISTIC_PNP_DEVICE = &H00000800
+    '     FILE_CHARACTERISTIC_TS_DEVICE = &H00001000
+    '     FILE_CHARACTERISTIC_WEBDAV_DEVICE = &H00002000
+    '     FILE_CHARACTERISTIC_CSV = &H00010000
+    '     FILE_DEVICE_ALLOW_APPCONTAINER_TRAVERSAL = &H00020000
+    '     FILE_PORTABLE_DEVICE = &H00040000
+    '     FILE_REMOTE_DEVICE_VSMB = &H00080000
+    '     FILE_DEVICE_REQUIRE_SECURITY_CHECK = &H00100000
+    ' End Enum
+    Public Type FILE_FS_DEVICE_INFORMATION
+        DeviceType As DEVICE_TYPE
+        Characteristics As FILE_DEVICE_CHARACTERISTICS
+    End Type
+    [ PackingAlignment (8) ]
+    Public Type FILE_FS_DRIVER_PATH_INFORMATION
+        DriverInPath As Byte
+        DriverNameLength As Long
+        DriverName(MAX_PATH - 1) As Integer
+    End Type
+    Public Type FILE_FS_FULL_SIZE_INFORMATION
+        TotalAllocationUnits As LARGE_INTEGER
+        CallerAvailableAllocationUnits As LARGE_INTEGER
+        ActualAvailableAllocationUnits As LARGE_INTEGER
+        SectorsPerAllocationUnit As Long
+        BytesPerSector As Long
+    End Type
+    Public Type FILE_FS_OBJECTID_INFORMATION
+        ObjectId(0 To 15) As Byte
+        ExtendedInfo(0 To 47) As Byte
+    End Type
+    Public Type FILE_FS_ATTRIBUTE_INFORMATION
+        FileSystemAttributes As FileSystemFlags
+        MaximumComponentNameLength As Long
+        FileSystemNameLength As Long
+        FileSystemName(80) As Integer
+    End Type
+    Public Enum FS_CONTROL_FLAGS
+        FILE_VC_QUOTA_NONE = &H00000000
+        FILE_VC_QUOTA_TRACK = &H00000001
+        FILE_VC_QUOTA_ENFORCE = &H00000002
+        FILE_VC_QUOTA_MASK = &H00000003
+        FILE_VC_CONTENT_INDEX_DISABLED = &H00000008
+        FILE_VC_LOG_QUOTA_THRESHOLD = &H00000010
+        FILE_VC_LOG_QUOTA_LIMIT = &H00000020
+        FILE_VC_LOG_VOLUME_THRESHOLD = &H00000040
+        FILE_VC_LOG_VOLUME_LIMIT = &H00000080
+        FILE_VC_QUOTAS_INCOMPLETE = &H00000100
+        FILE_VC_QUOTAS_REBUILDING = &H00000200
+        FILE_VC_VALID_MASK = &H000003ff
+    End Enum
+    Public Type FILE_FS_CONTROL_INFORMATION
+        FreeSpaceStartFiltering As LARGE_INTEGER
+        FreeSpaceThreshold As LARGE_INTEGER
+        FreeSpaceStopFiltering As LARGE_INTEGER
+        DefaultQuotaThreshold As LARGE_INTEGER
+        DefaultQuotaLimit As LARGE_INTEGER
+        FileSystemControlFlags As FS_CONTROL_FLAGS
+    End Type
+    Public Type FILE_FS_DATA_COPY_INFORMATION
+        NumberOfCopies As Long
+    End Type
+    Public Enum SECTOR_SIZE_FLAGS
+        SSINFO_FLAGS_ALIGNED_DEVICE = &H00000001
+    '   If SET the partition is properly aligned with the alignment of the device
+    '   If NOT SET the partition is NOT properly aligned with the partition which can
+    '       lead to performance issues on this device
+        SSINFO_FLAGS_PARTITION_ALIGNED_ON_DEVICE = &H00000002
+    '   If SET the device reports that it does not have a seek penalty (usually this means an SSD)
+    '   If NOT SET the device reports it does have a seek penalty or the property could not be queried
+        SSINFO_FLAGS_NO_SEEK_PENALTY = &H00000004
+    '   If SET the device supports the TRIM operation
+    '   If NOT SET the device does not support trim operations or the property could not be queried
+        SSINFO_FLAGS_TRIM_ENABLED = &H00000008
+    '   If SET this is a byte addressable storage device (i.e. a storage class memory or a persistent
+    '   memory device).
+    '   If NOT SET this is not a byte addressable storage device.
+    '   NOTE: File systems like NTFS and ReFS can support byte addressable mode where a file is directly
+    '   mapped to the physical address that the storage device expose, if the hardware supports
+    '   byte addressing (which is what this flag indicates) and the volume type allows byte
+    '   addressing.  To know if the volume type and the file system supports byte addressing, check
+    '   that FileSystemAttributes of FileFsAttributeInformation has FILE_DAX_VOLUME set.
+        SSINFO_FLAGS_BYTE_ADDRESSABLE = &H00000010
+    '   If this value is set for the Sector and Partition alignment
+    '   fields then it means the alignment is not known and the
+    '   alignment flags have no meaning
+        SSINFO_OFFSET_UNKNOWN = (&Hffffffff)
+    End Enum
+    Public Type FILE_FS_SECTOR_SIZE_INFORMATION
+        LogicalBytesPerSector As Long
+        PhysicalBytesPerSectorForAtomicity As Long
+        PhysicalBytesPerSectorForPerformance As Long
+        FileSystemEffectivePhysicalBytesPerSectorForAtomicity As Long
+        Flags As SECTOR_SIZE_FLAGS
+        ByteOffsetForSectorAlignment As Long
+        ByteOffsetForPartitionAlignment As Long
+    End Type
+    Public Type FILE_FS_FULL_SIZE_INFORMATION_EX
+        ActualTotalAllocationUnits As LongLong
+        ActualAvailableAllocationUnits As LongLong
+        ActualPoolUnavailableAllocationUnits As LongLong
+        CallerTotalAllocationUnits As LongLong
+        CallerAvailableAllocationUnits As LongLong
+        CallerPoolUnavailableAllocationUnits As LongLong
+        UsedAllocationUnits As LongLong
+        TotalReservedAllocationUnits As LongLong
+        VolumeStorageReserveAllocationUnits As LongLong
+        AvailableCommittedAllocationUnits As LongLong
+        PoolAvailableAllocationUnits As LongLong
+        SectorsPerAllocationUnit As Long
+        BytesPerSector As Long
+    End Type
+    Public Enum FileSystemFlags
+        FILE_CASE_SENSITIVE_SEARCH = &H00000001
+        FILE_CASE_PRESERVED_NAMES = &H00000002
+        FILE_UNICODE_ON_DISK = &H00000004
+        FILE_PERSISTENT_ACLS = &H00000008
+        FILE_FILE_COMPRESSION = &H00000010
+        FILE_VOLUME_QUOTAS = &H00000020
+        FILE_SUPPORTS_SPARSE_FILES = &H00000040
+        FILE_SUPPORTS_REPARSE_POINTS = &H00000080
+        FILE_SUPPORTS_REMOTE_STORAGE = &H00000100
+        FILE_RETURNS_CLEANUP_RESULT_INFO = &H00000200
+        FILE_SUPPORTS_POSIX_UNLINK_RENAME = &H00000400
+        FILE_SUPPORTS_BYPASS_IO = &H00000800
+        FILE_SUPPORTS_STREAM_SNAPSHOTS = &H00001000
+        FILE_SUPPORTS_CASE_SENSITIVE_DIRS = &H00002000
+        FILE_VOLUME_IS_COMPRESSED = &H00008000&
+        FILE_SUPPORTS_OBJECT_IDS = &H00010000
+        FILE_SUPPORTS_ENCRYPTION = &H00020000
+        FILE_NAMED_STREAMS = &H00040000
+        FILE_READ_ONLY_VOLUME = &H00080000
+        FILE_SEQUENTIAL_WRITE_ONCE = &H00100000
+        FILE_SUPPORTS_TRANSACTIONS = &H00200000
+        FILE_SUPPORTS_HARD_LINKS = &H00400000
+        FILE_SUPPORTS_EXTENDED_ATTRIBUTES = &H00800000
+        FILE_SUPPORTS_OPEN_BY_FILE_ID = &H01000000
+        FILE_SUPPORTS_USN_JOURNAL = &H02000000
+        FILE_SUPPORTS_INTEGRITY_STREAMS = &H04000000
+        FILE_SUPPORTS_BLOCK_REFCOUNTING = &H08000000
+        FILE_SUPPORTS_SPARSE_VDL = &H10000000
+        FILE_DAX_VOLUME = &H20000000
+        FILE_SUPPORTS_GHOSTING = &H40000000
+    End Enum
+    
+    Public Type FILE_FS_VOLUME_FLAGS_INFORMATION
+        Flags As FileSystemFlags
+    End Type
+    Public Type FILE_FS_METADATA_SIZE_INFORMATION
+        TotalMetadataAllocationUnits As LARGE_INTEGER
+        SectorsPerAllocationUnit As Long
+        BytesPerSector As Long
+    End Type
+    
+    Public Type FILE_DIRECTORY_INFORMATION
+      NextEntryOffset As Long
+      FileIndex As Long
+      CreationTime As FILETIME
+      LastAccessTime As FILETIME
+      LastWriteTime As FILETIME
+      ChangeTime As FILETIME
+      EndOfFile As LARGE_INTEGER
+      AllocationSize As LARGE_INTEGER
+      FileAttributes As FILE_ATTRIBUTES
+      FileNameLength As Long
+      FileName1(MAX_PATH) As Integer 'OFFSET=&H40 (64)
+    End Type
+    Public Type FILE_FULL_DIR_INFORMATION
+        NextEntryOffset As Long
+        FileIndex As Long
+        CreationTime As LARGE_INTEGER
+        LastAccessTime As LARGE_INTEGER
+        LastWriteTime As LARGE_INTEGER
+        ChangeTime As LARGE_INTEGER
+        EndOfFile As LARGE_INTEGER
+        AllocationSize As LARGE_INTEGER
+        FileAttributes As FILE_ATTRIBUTES
+        FileNameLength As Long
+        EaSize As Long
+        FileName(MAX_PATH) As Integer
+    End Type
+    Public Type FILE_BOTH_DIR_INFORMATION
+        NextEntryOffset As Long
+        FileIndex As Long
+        CreationTime As LARGE_INTEGER
+        LastAccessTime As LARGE_INTEGER
+        LastWriteTime As LARGE_INTEGER
+        ChangeTime As LARGE_INTEGER
+        EndOfFile As LARGE_INTEGER
+        AllocationSize As LARGE_INTEGER
+        FileAttributes As FILE_ATTRIBUTES
+        FileNameLength As Long
+        EaSize As Long
+        ShortNameLength As Byte
+        ShortName(0 To 11) As Integer
+        FileName(MAX_PATH) As Integer
+    End Type
+    Public Type FILE_BASIC_INFORMATION
+        CreationTime As LARGE_INTEGER
+        LastAccessTime As LARGE_INTEGER
+        LastWriteTime As LARGE_INTEGER
+        ChangeTime As LARGE_INTEGER
+        FileAttributes As FILE_ATTRIBUTES
+    End Type
+    Public Type FILE_STANDARD_INFORMATION
+        AllocationSize As LARGE_INTEGER
+        EndOfFile As LARGE_INTEGER
+        NumberOfLinks As Long
+        DeletePending As Byte
+        Directory As Byte
+    End Type
+    Public Type FILE_INTERNAL_INFORMATION
+        IndexNumber As LARGE_INTEGER
+    End Type
+    Public Type FILE_EA_INFORMATION
+        EaSize As Long
+    End Type
+    Public Type FILE_ACCESS_INFORMATION
+        AccessFlags As FileAccessRights
+    End Type
+    Public Type FILE_NAME_INFORMATION
+        FileNameLength As Long
+        FileName(MAX_PATH) As Integer
+    End Type
+    Public Type FILE_RENAME_INFORMATION
+        ReplaceIfExists As Byte
+        RootDirectory As LongPtr
+        FileNameLength As Long
+        FileName(MAX_PATH) As Integer
+    End Type
+    Public Type FILE_LINK_INFORMATION
+        ReplaceIfExists As Byte
+        RootDirectory As LongPtr
+        FileNameLength As Long
+        FileName(MAX_PATH) As Integer
+    End Type
+    Public Type FILE_NAMES_INFORMATION
+        NextEntryOffset As Long
+        FileIndex As Long
+        FileNameLength As Long
+        FileName(MAX_PATH) As Integer
+    End Type
+    Public Type FILE_DISPOSITION_INFORMATION
+        DeleteFile As Byte
+    End Type
+    Public Type FILE_POSITION_INFORMATION
+        CurrentByteOffset As LARGE_INTEGER
+    End Type
+    Public Type FILE_FULL_EA_INFORMATION
+        NextEntryOffset As Long
+        Flags As Byte
+        EaNameLength As Byte
+        EaValueLength As Integer
+        EaName(0 To 0) As Byte
+    End Type
+    Public Type FILE_MODE_INFORMATION
+        Mode As FileAccessFlags
+    End Type
+    Public Type FILE_ALIGNMENT_INFORMATION
+        AlignmentRequirement As Long
+    End Type
+    Public Type FILE_ALL_INFORMATION
+        BasicInformation As FILE_BASIC_INFORMATION
+        StandardInformation As FILE_STANDARD_INFORMATION
+        InternalInformation As FILE_INTERNAL_INFORMATION
+        EaInformation As FILE_EA_INFORMATION
+        AccessInformation As FILE_ACCESS_INFORMATION
+        PositionInformation As FILE_POSITION_INFORMATION
+        ModeInformation As FILE_MODE_INFORMATION
+        AlignmentInformation As FILE_ALIGNMENT_INFORMATION
+        NameInformation As FILE_NAME_INFORMATION
+    End Type
+    Public Type FILE_ALLOCATION_INFORMATION
+        AllocationSize As LARGE_INTEGER
+    End Type
+    Public Type FILE_END_OF_FILE_INFORMATION
+        EndOfFile As LARGE_INTEGER
+    End Type
+    Public Type FILE_STREAM_INFORMATION
+        NextEntryOffset As Long
+        StreamNameLength As Long
+        StreamSize As LARGE_INTEGER
+        StreamAllocationSize As LARGE_INTEGER
+        StreamName(259) As Integer
+    End Type
+    Public Enum FILE_PIPE_READ_MODE
+        FILE_PIPE_BYTE_STREAM_MODE = &H00000000
+        FILE_PIPE_MESSAGE_MODE = &H00000001
+    End Enum
+    Public Enum FILE_PIPE_COMPLETION_MODE
+        FILE_PIPE_QUEUE_OPERATION = &H00000000
+        FILE_PIPE_COMPLETE_OPERATION = &H00000001
+    End Enum
+    Public Type FILE_PIPE_INFORMATION
+        ReadMode As FILE_PIPE_READ_MODE
+        CompletionMode As FILE_PIPE_COMPLETION_MODE
+    End Type
+    Public Enum FILE_PIPE_TYPE
+        FILE_PIPE_BYTE_STREAM_TYPE = &H00000000
+        FILE_PIPE_MESSAGE_TYPE = &H00000001
+        FILE_PIPE_ACCEPT_REMOTE_CLIENTS = &H00000000
+        FILE_PIPE_REJECT_REMOTE_CLIENTS = &H00000002
+        FILE_PIPE_TYPE_VALID_MASK = &H00000003
+    End Enum
+    Public Enum FILE_PIPE_CONFIG
+        FILE_PIPE_INBOUND = &H00000000
+        FILE_PIPE_OUTBOUND = &H00000001
+        FILE_PIPE_FULL_DUPLEX = &H00000002
+    End Enum
+    Public Enum FILE_PIPE_STATE
+        FILE_PIPE_DISCONNECTED_STATE = &H00000001
+        FILE_PIPE_LISTENING_STATE = &H00000002
+        FILE_PIPE_CONNECTED_STATE = &H00000003
+        FILE_PIPE_CLOSING_STATE = &H00000004
+    End Enum
+    Public Enum FILE_PIPE_END
+        FILE_PIPE_CLIENT_END = &H00000000
+        FILE_PIPE_SERVER_END = &H00000001
+    End Enum
+    Public Type FILE_PIPE_LOCAL_INFORMATION
+        NamedPipeType As FILE_PIPE_TYPE
+        NamedPipeConfiguration As FILE_PIPE_CONFIG
+        MaximumInstances As Long
+        CurrentInstances As Long
+        InboundQuota As Long
+        ReadDataAvailable As Long
+        OutboundQuota As Long
+        WriteQuotaAvailable As Long
+        NamedPipeState As FILE_PIPE_STATE
+        NamedPipeEnd As FILE_PIPE_END
+    End Type
+    Public Type FILE_PIPE_REMOTE_INFORMATION
+        CollectDataTime As LARGE_INTEGER
+        MaximumCollectionCount As Long
+    End Type
+    Public Type FILE_MAILSLOT_QUERY_INFORMATION
+        MaximumMessageSize As Long
+        MailslotQuota As Long
+        NextMessageSize As Long
+        MessagesAvailable As Long
+        ReadTimeout As LARGE_INTEGER
+    End Type
+    Public Type FILE_MAILSLOT_SET_INFORMATION
+        ReadTimeout As LongPtr 'PLARGE_INTEGER
+    End Type
+    Public Enum NT_COMPRESSION_FORMAT
+        COMPRESSION_FORMAT_NONE = (&H0000)  ' winnt
+        COMPRESSION_FORMAT_DEFAULT = (&H0001)  ' winnt
+        COMPRESSION_FORMAT_LZNT1 = (&H0002)  ' winnt
+        COMPRESSION_FORMAT_XPRESS = (&H0003)  ' winnt
+        COMPRESSION_FORMAT_XPRESS_HUFF = (&H0004)  ' winnt
+        COMPRESSION_FORMAT_XP10 = (&H0005)  ' winnt
+        COMPRESSION_FORMAT_MAX = (&H0005)
+        COMPRESSION_ENGINE_STANDARD = (&H0000)  ' winnt
+        COMPRESSION_ENGINE_MAXIMUM = (&H0100)  ' winnt
+        COMPRESSION_ENGINE_HIBER = (&H0200)  ' winnt
+        COMPRESSION_ENGINE_MAX = (&H0200)
+        COMPRESSION_FORMAT_MASK = (&H00FF)
+        COMPRESSION_ENGINE_MASK = (&HFF00&)
+        COMPRESSION_FORMAT_ENGINE_MASK = (COMPRESSION_FORMAT_MASK Or COMPRESSION_ENGINE_MASK)
+    End Enum
+    Public Type FILE_COMPRESSION_INFORMATION
+        CompressedFileSize As LARGE_INTEGER
+        /* [ TypeHint(NT_COMPRESSION_FORMAT) ] */ CompressionFormat As Integer
+        CompressionUnitShift As Byte
+        ChunkShift As Byte
+        ClusterShift As Byte
+        Reserved(0 To 2) As Byte
+    End Type
+    Public Type FILE_OBJECTID_INFORMATION
+        FileReference As LongLong
+        ObjectId(0 To 15) As Byte ' GUID
+        'union
+        '{
+        '    struct
+        '    {
+        '        UCHAR BirthVolumeId[16];
+        '         UCHAR BirthObjectId[16];
+        '         UCHAR DomainId[16];
+        '     };
+        '    UCHAR ExtendedInfo[48];
+        '};
+        IdOrInfo(47) As Byte
+    End Type
+    Public Type FILE_COMPLETION_INFORMATION
+        Port As LongPtr
+        Key As LongPtr
+    End Type
+    Public Type FILE_MOVE_CLUSTER_INFORMATION
+        ClusterCount As Long
+        RootDirectory As LongPtr
+        FileNameLength As Long
+        FileName(MAX_PATH) As Integer
+    End Type
+    Public Type FILE_QUOTA_INFORMATION
+        NextEntryOffset As Long
+        SidLength As Long
+        ChangeTime As LARGE_INTEGER
+        QuotaUsed As LARGE_INTEGER
+        QuotaThreshold As LARGE_INTEGER
+        QuotaLimit As LARGE_INTEGER
+        Sid As SID
+    End Type
+    Public Type FILE_REPARSE_POINT_INFORMATION
+        FileReference As LongLong
+        Tag As Long
+    End Type
+    Public Type FILE_NETWORK_OPEN_INFORMATION
+        CreationTime As LARGE_INTEGER
+        LastAccessTime As LARGE_INTEGER
+        LastWriteTime As LARGE_INTEGER
+        ChangeTime As LARGE_INTEGER
+        AllocationSize As LARGE_INTEGER
+        EndOfFile As LARGE_INTEGER
+        FileAttributes As FILE_ATTRIBUTES
+    End Type
+    Public Type FILE_ATTRIBUTE_TAG_INFORMATION
+        FileAttributes As FILE_ATTRIBUTES
+        ReparseTag As Long
+    End Type
+    Public Type FILE_TRACKING_INFORMATION
+        DestinationFile As LongPtr
+        ObjectInformationLength As Long
+        ObjectInformation() As Byte
+    End Type
+    Public Type FILE_ID_BOTH_DIR_INFORMATION
+        NextEntryOffset As Long
+        FileIndex As Long
+        CreationTime As LARGE_INTEGER
+        LastAccessTime As LARGE_INTEGER
+        LastWriteTime As LARGE_INTEGER
+        ChangeTime As LARGE_INTEGER
+        EndOfFile As LARGE_INTEGER
+        AllocationSize As LARGE_INTEGER
+        FileAttributes As FILE_ATTRIBUTES
+        FileNameLength As Long
+        EaSize As Long
+        ShortNameLength As Byte
+        ShortName(0 To 11) As Integer
+        FileId As LARGE_INTEGER
+        FileName(MAX_PATH) As Integer
+    End Type
+    Public Type FILE_ID_FULL_DIR_INFORMATION
+        NextEntryOffset As Long
+        FileIndex As Long
+        CreationTime As LARGE_INTEGER
+        LastAccessTime As LARGE_INTEGER
+        LastWriteTime As LARGE_INTEGER
+        ChangeTime As LARGE_INTEGER
+        EndOfFile As LARGE_INTEGER
+        AllocationSize As LARGE_INTEGER
+        FileAttributes As FILE_ATTRIBUTES
+        FileNameLength As Long
+        EaSize As Long
+        FileId As LARGE_INTEGER
+        FileName(0 To MAX_PATH) As Integer
+    End Type
+    Public Type FILE_VALID_DATA_LENGTH_INFORMATION
+        ValidDataLength As LARGE_INTEGER
+    End Type
+    Public Enum FILE_IO_COMPLETION_FLAGS
+        FILE_SKIP_COMPLETION_PORT_ON_SUCCESS = &H1
+        FILE_SKIP_SET_EVENT_ON_HANDLE = &H2
+        FILE_SKIP_SET_USER_EVENT_ON_FAST_IO = &H4
+    End Enum
+    Public Type FILE_IO_COMPLETION_NOTIFICATION_INFORMATION
+        Flags As FILE_IO_COMPLETION_FLAGS
+    End Type
+    Public Type FILE_IOSTATUSBLOCK_RANGE_INFORMATION
+        IoStatusBlockRange As LongPtr
+        Length As Long
+    End Type
+    Public Enum IO_PRIORITY_HINT
+        IoPriorityVeryLow = 0 ' Defragging, content indexing and other background I/Os.
+        IoPriorityLow   ' Prefetching for applications.
+        IoPriorityNormal   ' Normal I/Os.
+        IoPriorityHigh   ' Used by filesystems for checkpoint I/O.
+        IoPriorityCritical  ' Used by memory manager. Not available for applications.
+        MaxIoPriorityTypes
+    End Enum
+    Public Type FILE_IO_PRIORITY_HINT_INFORMATION
+        PriorityHint As IO_PRIORITY_HINT
+        Pad As Long 'DESCLSPEC_ALIGN(8)
+    End Type
+    Public Type FILE_SFIO_RESERVE_INFORMATION
+        RequestsPerPeriod As Long
+        Period As Long
+        RetryFailures As Byte
+        Discardable As Byte
+        RequestSize As Long
+        NumOutstandingRequests As Long
+    End Type
+    Public Type FILE_SFIO_VOLUME_INFORMATION
+        MaximumRequestsPerPeriod As Long
+        MinimumPeriod As Long
+        MinimumTransferSize As Long
+    End Type
+    Public Type FILE_LINK_ENTRY_INFORMATION
+        NextEntryOffset As Long
+        ParentFileId As LongLong ' LARGE_INTEGER
+        FileNameLength As Long
+        FileName(0 To MAX_PATH) As Integer
+    End Type
+    Public Type FILE_LINKS_INFORMATION
+        BytesNeeded As Long
+        EntriesReturned As Long
+        Entry As FILE_LINK_ENTRY_INFORMATION
+    End Type
+    [ Description ("WARNING: You cannot use this struct as-is due to SAFEARRAY considerations. Copy the first 4 bytes, determine the size, then copy the rest into ProcessIdList(0) ") ]
+    Public Type FILE_PROCESS_IDS_USING_FILE_INFORMATION
+        NumberOfProcessIdsInList As Long
+        ProcessIdList() As LongPtr
+    End Type
+    Public Type FILE_NETWORK_PHYSICAL_NAME_INFORMATION
+        FileNameLength As Long
+        FileName(0 To MAX_PATH) As Integer
+    End Type
+    Public Enum FILE_TX_DIRINFO_FLAGS
+        FILE_ID_GLOBAL_TX_DIR_INFO_FLAG_WRITELOCKED = &H00000001
+        FILE_ID_GLOBAL_TX_DIR_INFO_FLAG_VISIBLE_TO_TX = &H00000002
+        FILE_ID_GLOBAL_TX_DIR_INFO_FLAG_VISIBLE_OUTSIDE_TX = &H00000004
+    End Enum
+    Public Type FILE_ID_GLOBAL_TX_DIR_INFORMATION
+        NextEntryOffset As Long
+        FileIndex As Long
+        CreationTime As LARGE_INTEGER
+        LastAccessTime As LARGE_INTEGER
+        LastWriteTime As LARGE_INTEGER
+        ChangeTime As LARGE_INTEGER
+        EndOfFile As LARGE_INTEGER
+        AllocationSize As LARGE_INTEGER
+        FileAttributes As FILE_ATTRIBUTES
+        FileNameLength As Long
+        FileId As LARGE_INTEGER
+        LockingTransactionId As UUID
+        TxInfoFlags As FILE_TX_DIRINFO_FLAGS
+        FileName(0 To MAX_PATH) As Integer
+    End Type
+    Public Type FILE_IS_REMOTE_DEVICE_INFORMATION
+        IsRemote As Byte
+    End Type
+    Public Type FILE_NUMA_NODE_INFORMATION
+        NodeNumber As Integer
+    End Type
+    Public Type FILE_STANDARD_LINK_INFORMATION
+        NumberOfAccessibleLinks As Long
+        TotalNumberOfLinks As Long
+        DeletePending As Byte
+        Directory As Byte
+    End Type
+    Public Enum WNNC_CODES
+        WNNC_NET_MSNET = &H00010000
+        WNNC_NET_SMB = &H00020000
+        WNNC_NET_NETWARE = &H00030000
+        WNNC_NET_VINES = &H00040000
+        WNNC_NET_10NET = &H00050000
+        WNNC_NET_LOCUS = &H00060000
+        WNNC_NET_SUN_PC_NFS = &H00070000
+        WNNC_NET_LANSTEP = &H00080000
+        WNNC_NET_9TILES = &H00090000
+        WNNC_NET_LANTASTIC = &H000A0000
+        WNNC_NET_AS400 = &H000B0000
+        WNNC_NET_FTP_NFS = &H000C0000
+        WNNC_NET_PATHWORKS = &H000D0000
+        WNNC_NET_LIFENET = &H000E0000
+        WNNC_NET_POWERLAN = &H000F0000
+        WNNC_NET_BWNFS = &H00100000
+        WNNC_NET_COGENT = &H00110000
+        WNNC_NET_FARALLON = &H00120000
+        WNNC_NET_APPLETALK = &H00130000
+        WNNC_NET_INTERGRAPH = &H00140000
+        WNNC_NET_SYMFONET = &H00150000
+        WNNC_NET_CLEARCASE = &H00160000
+        WNNC_NET_FRONTIER = &H00170000
+        WNNC_NET_BMC = &H00180000
+        WNNC_NET_DCE = &H00190000
+        WNNC_NET_AVID = &H001A0000
+        WNNC_NET_DOCUSPACE = &H001B0000
+        WNNC_NET_MANGOSOFT = &H001C0000
+        WNNC_NET_SERNET = &H001D0000
+        WNNC_NET_RIVERFRONT1 = &H001E0000
+        WNNC_NET_RIVERFRONT2 = &H001F0000
+        WNNC_NET_DECORB = &H00200000
+        WNNC_NET_PROTSTOR = &H00210000
+        WNNC_NET_FJ_REDIR = &H00220000
+        WNNC_NET_DISTINCT = &H00230000
+        WNNC_NET_TWINS = &H00240000
+        WNNC_NET_RDR2SAMPLE = &H00250000
+        WNNC_NET_CSC = &H00260000
+        WNNC_NET_3IN1 = &H00270000
+        WNNC_NET_EXTENDNET = &H00290000
+        WNNC_NET_STAC = &H002A0000
+        WNNC_NET_FOXBAT = &H002B0000
+        WNNC_NET_YAHOO = &H002C0000
+        WNNC_NET_EXIFS = &H002D0000
+        WNNC_NET_DAV = &H002E0000
+        WNNC_NET_KNOWARE = &H002F0000
+        WNNC_NET_OBJECT_DIRE = &H00300000
+        WNNC_NET_MASFAX = &H00310000
+        WNNC_NET_HOB_NFS = &H00320000
+        WNNC_NET_SHIVA = &H00330000
+        WNNC_NET_IBMAL = &H00340000
+        WNNC_NET_LOCK = &H00350000
+        WNNC_NET_TERMSRV = &H00360000
+        WNNC_NET_SRT = &H00370000
+        WNNC_NET_QUINCY = &H00380000
+        WNNC_NET_OPENAFS = &H00390000
+        WNNC_NET_AVID1 = &H003A0000
+        WNNC_NET_DFS = &H003B0000
+        WNNC_NET_KWNP = &H003C0000
+        WNNC_NET_ZENWORKS = &H003D0000
+        WNNC_NET_DRIVEONWEB = &H003E0000
+        WNNC_NET_VMWARE = &H003F0000
+        WNNC_NET_RSFX = &H00400000
+        WNNC_NET_MFILES = &H00410000
+        WNNC_NET_MS_NFS = &H00420000
+        WNNC_NET_GOOGLE = &H00430000
+        WNNC_NET_NDFS = &H00440000
+        WNNC_NET_DOCUSHARE = &H00450000
+        WNNC_NET_AURISTOR_FS = &H00460000
+        WNNC_NET_SECUREAGENT = &H00470000
+        WNNC_NET_9P = &H00480000
+        WNNC_CRED_MANAGER = &HFFFF0000
+    '  Network type aliases
+        WNNC_NET_LANMAN = WNNC_NET_SMB
+    End Enum
+    Public Enum REMOTE_PROTOCOL_FLAGS
+        REMOTE_PROTOCOL_FLAG_LOOPBACK = &H00000001
+        REMOTE_PROTOCOL_FLAG_OFFLINE = &H00000002
+    '  Protocol generic flags valid for version 2 and higher
+    ' #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
+        REMOTE_PROTOCOL_FLAG_PERSISTENT_HANDLE = &H00000004
+        REMOTE_PROTOCOL_FLAG_PRIVACY = &H00000008
+        REMOTE_PROTOCOL_FLAG_INTEGRITY = &H00000010
+        REMOTE_PROTOCOL_FLAG_MUTUAL_AUTH = &H00000020
+    End Enum
+    Public Type FILE_REMOTE_PROTOCOL_INFORMATION
+        StructureVersion As Integer
+        StructureSize As Integer
+        Protocol As WNNC_CODES
+        ProtocolMajorVersion As Integer
+        ProtocolMinorVersion As Integer
+        ProtocolRevision As Integer
+        Reserved As Integer
+        Flags As REMOTE_PROTOCOL_FLAGS
+        GenericReserved(7) As Long
+        ProtocolSpecific(15) As Long
+    End Type
+    Public Type FILE_VOLUME_NAME_INFORMATION
+        DeviceNameLength As Long
+        DeviceName(31) As Integer
+    End Type
+    Public Type FILE_ID_128
+        Identifier(0 To 15) As Byte
+    End Type
+    Public Type FILE_ID_INFORMATION
+        VolumeSerialNumber As LongLong
+        FileId As FILE_ID_128
+    End Type
+    Public Type FILE_ID_EXTD_DIR_INFORMATION
+        NextEntryOffset As Long
+        FileIndex As Long
+        CreationTime As LARGE_INTEGER
+        LastAccessTime As LARGE_INTEGER
+        LastWriteTime As LARGE_INTEGER
+        ChangeTime As LARGE_INTEGER
+        EndOfFile As LARGE_INTEGER
+        AllocationSize As LARGE_INTEGER
+        FileAttributes As FILE_ATTRIBUTES
+        FileNameLength As Long
+        EaSize As Long
+        ReparsePointTag As Long
+        FileId As FILE_ID_128
+        FileName(0 To MAX_PATH) As Integer
+    End Type
+    Public Type FILE_LINK_ENTRY_FULL_ID_INFORMATION
+        NextEntryOffset As Long
+        ParentFileId As FILE_ID_128
+        FileNameLength As Long
+        FileName(0 To MAX_PATH) As Integer
+    End Type
+    Public Type FILE_ID_EXTD_BOTH_DIR_INFORMATION
+        NextEntryOffset As Long
+        FileIndex As Long
+        CreationTime As LARGE_INTEGER
+        LastAccessTime As LARGE_INTEGER
+        LastWriteTime As LARGE_INTEGER
+        ChangeTime As LARGE_INTEGER
+        EndOfFile As LARGE_INTEGER
+        AllocationSize As LARGE_INTEGER
+        FileAttributes As FILE_ATTRIBUTES
+        FileNameLength As Long
+        EaSize As Long
+        ReparsePointTag As Long
+        FileId As FILE_ID_128
+        ShortNameLength As Byte
+        ShortName(0 To 11) As Integer
+        FileName(0 To MAX_PATH) As Integer
+    End Type
+    Public Enum FILE_DISPOSITION_EX_FLAGS
+        FILE_DISPOSITION_FLAG_DO_NOT_DELETE = &H00000000
+        FILE_DISPOSITION_FLAG_DELETE = &H00000001
+        FILE_DISPOSITION_FLAG_POSIX_SEMANTICS = &H00000002
+        FILE_DISPOSITION_FLAG_FORCE_IMAGE_SECTION_CHECK = &H00000004
+        FILE_DISPOSITION_FLAG_ON_CLOSE = &H00000008
+    End Enum
+    Public Type FILE_DISPOSITION_INFO_EX
+        Flags As FILE_DISPOSITION_EX_FLAGS
+    End Type
+    Public Enum FILE_RENAME_EX_FLAGS
+        FILE_RENAME_REPLACE_IF_EXISTS = &H00000001
+        FILE_RENAME_POSIX_SEMANTICS = &H00000002
+    ' #endif
+    ' #if (PHNT_VERSION >= PHNT_REDSTONE3)
+        FILE_RENAME_SUPPRESS_PIN_STATE_INHERITANCE = &H00000004
+    ' #endif
+    ' #if (PHNT_VERSION >= PHNT_REDSTONE5)
+        FILE_RENAME_SUPPRESS_STORAGE_RESERVE_INHERITANCE = &H00000008
+        FILE_RENAME_NO_INCREASE_AVAILABLE_SPACE = &H00000010
+        FILE_RENAME_NO_DECREASE_AVAILABLE_SPACE = &H00000020
+        FILE_RENAME_PRESERVE_AVAILABLE_SPACE = &H00000030
+        FILE_RENAME_IGNORE_READONLY_ATTRIBUTE = &H00000040
+    ' #endif
+    ' #if (PHNT_VERSION >= PHNT_19H1)
+        FILE_RENAME_FORCE_RESIZE_TARGET_SR = &H00000080
+        FILE_RENAME_FORCE_RESIZE_SOURCE_SR = &H00000100
+        FILE_RENAME_FORCE_RESIZE_SR = &H00000180
+    End Enum
+    Public Type FILE_RENAME_INFORMATION_EX
+        Flags As FILE_RENAME_EX_FLAGS
+        RootDirectory As LongPtr
+        FileNameLength As Long
+        FileName(MAX_PATH) As Integer
+    End Type
+    Public Enum FILE_STORAGE_TIER_CLASS
+        FileStorageTierClassUnspecified = 0
+        FileStorageTierClassCapacity = 1
+        FileStorageTierClassPerformance = 2
+        FileStorageTierClassMax = 3
+    End Enum
+    Public Enum FILE_STORAGE_TIER_FLAGS
+        FILE_STORAGE_TIER_FLAG_NO_SEEK_PENALTY = (&H00020000)
+        FILE_STORAGE_TIER_FLAG_WRITE_BACK_CACHE = (&H00200000)
+        FILE_STORAGE_TIER_FLAG_READ_CACHE = (&H00400000)
+        FILE_STORAGE_TIER_FLAG_PARITY = (&H00800000)
+        FILE_STORAGE_TIER_FLAG_SMR = (&H01000000)
+    End Enum
+    Public Type FILE_DESIRED_STORAGE_CLASS_INFORMATION
+        ' Class type of the tier
+        Class As FILE_STORAGE_TIER_CLASS
+        ' Flags
+        Flags As FILE_STORAGE_TIER_FLAGS
+    End Type
+    Public Type FILE_STAT_INFORMATION
+        FileId As LARGE_INTEGER
+        CreationTime As LARGE_INTEGER
+        LastAccessTime As LARGE_INTEGER
+        LastWriteTime As LARGE_INTEGER
+        ChangeTime As LARGE_INTEGER
+        AllocationSize As LARGE_INTEGER
+        EndOfFile As LARGE_INTEGER
+        FileAttributes As FILE_ATTRIBUTES
+        ReparseTag As Long
+        NumberOfLinks As Long
+        EffectiveAccess As Long
+    End Type
+    Public Type FILE_MEMORY_PARTITION_INFORMATION
+        OwnerPartitionHandle As LongPtr
+        'union
+        ' {
+        '     struct
+        '     {
+        '         UCHAR NoCrossPartitionAccess;
+        '         UCHAR Spare[3];
+        '     };
+        AllFlags As Long
+        '} Flags;
+    End Type
+    Public Enum FILE_LX_FLAGS
+        LX_FILE_METADATA_HAS_UID = &H1
+        LX_FILE_METADATA_HAS_GID = &H2
+        LX_FILE_METADATA_HAS_MODE = &H4
+        LX_FILE_METADATA_HAS_DEVICE_ID = &H8
+        LX_FILE_CASE_SENSITIVE_DIR = &H10
+    End Enum
+    Public Enum FILE_LX_MODE
+        _S_IFMT  = &HF000&  ' File type mask
+        _S_IFDIR  = &H4000  ' Directory
+        _S_IFCHR  = &H2000  ' Character special
+        _S_IFIFO  = &H1000  ' Pipe
+        _S_IFREG  = &H8000&  ' Regular
+        _S_IREAD  = &H0100  ' Read permission, owner
+        _S_IWRITE  = &H0080  ' Write permission, owner
+        _S_IEXEC  = &H0040  ' Execute/search permission, owner
+        S_IFMT = _S_IFMT
+        S_IFDIR = _S_IFDIR
+        S_IFCHR = _S_IFCHR
+        S_IFREG = _S_IFREG
+        S_IREAD = _S_IREAD
+        S_IWRITE = _S_IWRITE
+        S_IEXEC = _S_IEXEC
+    End Enum
+    Public Type FILE_STAT_LX_INFORMATION
+        FileId As LARGE_INTEGER
+        CreationTime As LARGE_INTEGER
+        LastAccessTime As LARGE_INTEGER
+        LastWriteTime As LARGE_INTEGER
+        ChangeTime As LARGE_INTEGER
+        AllocationSize As LARGE_INTEGER
+        EndOfFile As LARGE_INTEGER
+        FileAttributes As FILE_ATTRIBUTES
+        ReparseTag As Long
+        NumberOfLinks As Long
+        EffectiveAccess As FileAccessRights
+        LxFlags As FILE_LX_FLAGS
+        LxUid As Long
+        LxGid As Long
+        LxMode As FILE_LX_MODE
+        LxDeviceIdMajor As Long
+        LxDeviceIdMinor As Long
+    End Type
+    Public Enum FILE_CS_FLAGS
+        FILE_CS_FLAG_CASE_SENSITIVE_DIR = &H00000001
+    End Enum
+    Public Type FILE_CASE_SENSITIVE_INFORMATION
+        Flags As FILE_CS_FLAGS
+    End Type
+    Public Enum FILE_LINK_EX_FLAGS
+        FILE_LINK_REPLACE_IF_EXISTS = &H00000001
+        FILE_LINK_POSIX_SEMANTICS = &H00000002
+        FILE_LINK_SUPPRESS_STORAGE_RESERVE_INHERITANCE = &H00000008
+        FILE_LINK_NO_INCREASE_AVAILABLE_SPACE = &H00000010
+        FILE_LINK_NO_DECREASE_AVAILABLE_SPACE = &H00000020
+        FILE_LINK_PRESERVE_AVAILABLE_SPACE = &H00000030
+        FILE_LINK_IGNORE_READONLY_ATTRIBUTE = &H00000040
+    ' #endif
+    ' #if (PHNT_VERSION >= PHNT_19H1)
+        FILE_LINK_FORCE_RESIZE_TARGET_SR = &H00000080
+        FILE_LINK_FORCE_RESIZE_SOURCE_SR = &H00000100
+        FILE_LINK_FORCE_RESIZE_SR = &H00000180
+    End Enum
+    Public Type FILE_LINK_INFORMATION_EX
+        Flags As FILE_LINK_EX_FLAGS
+        RootDirectory As LongPtr
+        FileNameLength As Long
+        FileName(MAX_PATH) As Integer
+    End Type
+    Public Enum FILE_KNOWN_FOLDER_TYPE
+        KnownFolderNone = 0
+        KnownFolderDesktop = 1
+        KnownFolderDocuments = 2
+        KnownFolderDownloads = 3
+        KnownFolderMusic = 4
+        KnownFolderPictures = 5
+        KnownFolderVideos = 6
+        KnownFolderOther = 7
+        KnownFolderMax = 7
+    End Enum
+    Public Type FILE_KNOWN_FOLDER_INFORMATION
+        Type As FILE_KNOWN_FOLDER_TYPE
+    End Type
+ 
+    Public Enum FILE_INFORMATION_CLASS
+        FileDirectoryInformation = 1 ' FILE_DIRECTORY_INFORMATION
+        FileFullDirectoryInformation ' FILE_FULL_DIR_INFORMATION
+        FileBothDirectoryInformation ' FILE_BOTH_DIR_INFORMATION
+        FileBasicInformation ' FILE_BASIC_INFORMATION
+        FileStandardInformation ' FILE_STANDARD_INFORMATION
+        FileInternalInformation ' FILE_INTERNAL_INFORMATION
+        FileEaInformation ' FILE_EA_INFORMATION
+        FileAccessInformation ' FILE_ACCESS_INFORMATION
+        FileNameInformation ' FILE_NAME_INFORMATION
+        FileRenameInformation ' FILE_RENAME_INFORMATION // 10
+        FileLinkInformation ' FILE_LINK_INFORMATION
+        FileNamesInformation ' FILE_NAMES_INFORMATION
+        FileDispositionInformation ' FILE_DISPOSITION_INFORMATION
+        FilePositionInformation ' FILE_POSITION_INFORMATION
+        FileFullEaInformation ' FILE_FULL_EA_INFORMATION
+        FileModeInformation ' FILE_MODE_INFORMATION
+        FileAlignmentInformation ' FILE_ALIGNMENT_INFORMATION
+        FileAllInformation ' FILE_ALL_INFORMATION
+        FileAllocationInformation ' FILE_ALLOCATION_INFORMATION
+        FileEndOfFileInformation ' FILE_END_OF_FILE_INFORMATION // 20
+        FileAlternateNameInformation ' FILE_NAME_INFORMATION
+        FileStreamInformation ' FILE_STREAM_INFORMATION
+        FilePipeInformation ' FILE_PIPE_INFORMATION
+        FilePipeLocalInformation ' FILE_PIPE_LOCAL_INFORMATION
+        FilePipeRemoteInformation ' FILE_PIPE_REMOTE_INFORMATION
+        FileMailslotQueryInformation ' FILE_MAILSLOT_QUERY_INFORMATION
+        FileMailslotSetInformation ' FILE_MAILSLOT_SET_INFORMATION
+        FileCompressionInformation ' FILE_COMPRESSION_INFORMATION
+        FileObjectIdInformation ' FILE_OBJECTID_INFORMATION
+        FileCompletionInformation ' FILE_COMPLETION_INFORMATION // 30
+        FileMoveClusterInformation ' FILE_MOVE_CLUSTER_INFORMATION
+        FileQuotaInformation ' FILE_QUOTA_INFORMATION
+        FileReparsePointInformation ' FILE_REPARSE_POINT_INFORMATION
+        FileNetworkOpenInformation ' FILE_NETWORK_OPEN_INFORMATION
+        FileAttributeTagInformation ' FILE_ATTRIBUTE_TAG_INFORMATION
+        FileTrackingInformation ' FILE_TRACKING_INFORMATION
+        FileIdBothDirectoryInformation ' FILE_ID_BOTH_DIR_INFORMATION
+        FileIdFullDirectoryInformation ' FILE_ID_FULL_DIR_INFORMATION
+        FileValidDataLengthInformation ' FILE_VALID_DATA_LENGTH_INFORMATION
+        FileShortNameInformation ' FILE_NAME_INFORMATION // 40
+        FileIoCompletionNotificationInformation ' FILE_IO_COMPLETION_NOTIFICATION_INFORMATION // since VISTA
+        FileIoStatusBlockRangeInformation ' FILE_IOSTATUSBLOCK_RANGE_INFORMATION
+        FileIoPriorityHintInformation ' FILE_IO_PRIORITY_HINT_INFORMATION, FILE_IO_PRIORITY_HINT_INFORMATION_EX
+        FileSfioReserveInformation ' FILE_SFIO_RESERVE_INFORMATION
+        FileSfioVolumeInformation ' FILE_SFIO_VOLUME_INFORMATION
+        FileHardLinkInformation ' FILE_LINKS_INFORMATION
+        FileProcessIdsUsingFileInformation ' FILE_PROCESS_IDS_USING_FILE_INFORMATION
+        FileNormalizedNameInformation ' FILE_NAME_INFORMATION
+        FileNetworkPhysicalNameInformation ' FILE_NETWORK_PHYSICAL_NAME_INFORMATION
+        FileIdGlobalTxDirectoryInformation ' FILE_ID_GLOBAL_TX_DIR_INFORMATION // since WIN7 // 50
+        FileIsRemoteDeviceInformation ' FILE_IS_REMOTE_DEVICE_INFORMATION
+        FileUnusedInformation
+        FileNumaNodeInformation ' FILE_NUMA_NODE_INFORMATION
+        FileStandardLinkInformation ' FILE_STANDARD_LINK_INFORMATION
+        FileRemoteProtocolInformation ' FILE_REMOTE_PROTOCOL_INFORMATION
+        FileRenameInformationBypassAccessCheck ' (kernel-mode only); FILE_RENAME_INFORMATION // since WIN8
+        FileLinkInformationBypassAccessCheck ' (kernel-mode only); FILE_LINK_INFORMATION
+        FileVolumeNameInformation ' FILE_VOLUME_NAME_INFORMATION
+        FileIdInformation ' FILE_ID_INFORMATION
+        FileIdExtdDirectoryInformation ' FILE_ID_EXTD_DIR_INFORMATION // 60
+        FileReplaceCompletionInformation ' FILE_COMPLETION_INFORMATION // since WINBLUE
+        FileHardLinkFullIdInformation ' FILE_LINK_ENTRY_FULL_ID_INFORMATION
+        FileIdExtdBothDirectoryInformation ' FILE_ID_EXTD_BOTH_DIR_INFORMATION // since THRESHOLD
+        FileDispositionInformationEx ' FILE_DISPOSITION_INFO_EX // since REDSTONE
+        FileRenameInformationEx ' FILE_RENAME_INFORMATION_EX
+        FileRenameInformationExBypassAccessCheck ' (kernel-mode only); FILE_RENAME_INFORMATION_EX
+        FileDesiredStorageClassInformation ' FILE_DESIRED_STORAGE_CLASS_INFORMATION // since REDSTONE2
+        FileStatInformation ' FILE_STAT_INFORMATION
+        FileMemoryPartitionInformation ' FILE_MEMORY_PARTITION_INFORMATION // since REDSTONE3
+        FileStatLxInformation ' FILE_STAT_LX_INFORMATION // since REDSTONE4 // 70
+        FileCaseSensitiveInformation ' FILE_CASE_SENSITIVE_INFORMATION
+        FileLinkInformationEx ' FILE_LINK_INFORMATION_EX // since REDSTONE5
+        FileLinkInformationExBypassAccessCheck ' (kernel-mode only); FILE_LINK_INFORMATION_EX
+        FileStorageReserveIdInformation ' FILE_SET_STORAGE_RESERVE_ID_INFORMATION
+        FileCaseSensitiveInformationForceAccessCheck ' FILE_CASE_SENSITIVE_INFORMATION
+        FileKnownFolderInformation ' FILE_KNOWN_FOLDER_INFORMATION // since WIN11
+        FileMaximumInformation
+    End Enum
+    
+    
+    Public Enum PROCESSINFOCLASS
+        ProcessBasicInformation = &H00
+        ProcessQuotaLimits = &H01
+        ProcessIoCounters = &H02
+        ProcessVmCounters = &H03
+        ProcessTimes = &H04
+        ProcessBasePriority = &H05
+        ProcessRaisePriority = &H06
+        ProcessDebugPort = &H07
+        ProcessExceptionPort = &H08
+        ProcessAccessToken = &H09
+        ProcessLdtInformation = &H0A
+        ProcessLdtSize = &H0B
+        ProcessDefaultHardErrorMode = &H0C
+        ProcessIoPortHandlers = &H0D
+        ProcessPooledUsageAndLimits = &H0E
+        ProcessWorkingSetWatch = &H0F
+        ProcessUserModeIOPL = &H10
+        ProcessEnableAlignmentFaultFixup = &H11
+        ProcessPriorityClass = &H12
+        ProcessWx86Information = &H13
+        ProcessHandleCount = &H14
+        ProcessAffinityMask = &H15
+        ProcessPriorityBoost = &H16
+        ProcessDeviceMap = &H17
+        ProcessSessionInformation = &H18
+        ProcessForegroundInformation = &H19
+        ProcessWow64Information = &H1A
+        ProcessImageFileName = &H1B
+        ProcessLUIDDeviceMapsEnabled = &H1C
+        ProcessBreakOnTermination = &H1D
+        ProcessDebugObjectHandle = &H1E
+        ProcessDebugFlags = &H1F
+        ProcessHandleTracing = &H20
+        ProcessIoPriority = &H21
+        ProcessExecuteFlags = &H22
+        ProcessResourceManagement = &H23
+        ProcessCookie = &H24
+        ProcessImageInformation = &H25
+        ProcessCycleTime = &H26
+        ProcessPagePriority = &H27
+        ProcessInstrumentationCallback = &H28
+        ProcessThreadStackAllocation = &H29
+        ProcessWorkingSetWatchEx = &H2A
+        ProcessImageFileNameWin32 = &H2B
+        ProcessImageFileMapping = &H2C
+        ProcessAffinityUpdateMode = &H2D
+        ProcessMemoryAllocationMode = &H2E
+        ProcessGroupInformation = &H2F
+        ProcessTokenVirtualizationEnabled = &H30
+        ProcessConsoleHostProcess = &H31
+        ProcessWindowInformation = &H32
+        ProcessHandleInformation = &H33
+        ProcessMitigationPolicy = &H34
+        ProcessDynamicFunctionTableInformation = &H35
+        ProcessHandleCheckingMode = &H36
+        ProcessKeepAliveCount = &H37
+        ProcessRevokeFileHandles = &H38
+        ProcessWorkingSetControl = &H39
+        ProcessHandleTable = &H3A
+        ProcessCheckStackExtentsMode = &H3B
+        ProcessCommandLineInformation = &H3C
+        ProcessProtectionInformation = &H3D
+        ProcessMemoryExhaustion = &H3E
+        ProcessFaultInformation = &H3F
+        ProcessTelemetryIdInformation = &H40
+        ProcessCommitReleaseInformation = &H41
+        ProcessDefaultCpuSetsInformation = &H42
+        ProcessAllowedCpuSetsInformation = &H43
+        ProcessSubsystemProcess = &H44
+        ProcessJobMemoryInformation = &H45
+        ProcessInPublic = &H46
+        ProcessRaiseUMExceptionOnInvalidHandleClose = &H47
+        ProcessIumChallengeResponse = &H48
+        ProcessChildProcessInformation = &H49
+        ProcessHighGraphicsPriorityInformation = &H4A
+        ProcessSubsystemInformation = &H4B
+        ProcessEnergyValues = &H4C
+        ProcessActivityThrottleState = &H4D
+        ProcessActivityThrottlePolicy = &H4E
+        ProcessWin32kSyscallFilterInformation = &H4F
+        ProcessDisableSystemAllowedCpuSets = &H50
+        ProcessWakeInformation = &H51
+        ProcessEnergyTrackingState = &H52
+        ProcessManageWritesToExecutableMemory = &H53
+        ProcessCaptureTrustletLiveDump = &H54
+        ProcessTelemetryCoverage = &H55
+        ProcessEnclaveInformation = &H56
+        ProcessEnableReadWriteVmLogging = &H57
+        ProcessUptimeInformation = &H58
+        ProcessImageSection = &H59
+        ProcessDebugAuthInformation = &H5A
+        ProcessSystemResourceManagement = &H5B
+        ProcessSequenceNumber = &H5C
+        ProcessLoaderDetour = &H5D
+        ProcessSecurityDomainInformation = &H5E
+        ProcessCombineSecurityDomainsInformation = &H5F
+        ProcessEnableLogging = &H60
+        ProcessLeapSecondInformation = &H61
+        ProcessFiberShadowStackAllocation = &H62
+        ProcessFreeFiberShadowStackAllocation = &H63
+        MaxProcessInfoClass = &H64
+    End Enum
+    Public Type PROCESS_BASIC_INFORMATION
+        ExitStatus                      As Long
+        Reserved0                       As Long
+        PebBaseAddress                  As LongPtr
+        AffinityMask                    As LongPtr
+        BasePriority                    As Long
+        Reserved1                       As Long
+        uUniqueProcessId                As LongPtr
+        uInheritedFromUniqueProcessId   As LongPtr
+    End Type
+    Public Type RTL_DRIVE_LETTER_CURDIR
+        Flags As Integer
+        Length As Integer
+        TimeStamp As Long
+        DosPath As UNICODE_STRING
+    End Type
+    Public Type CURDIR
+        DosPath As UNICODE_STRING
+        Handle As LongPtr
+    End Type
+    ' Public Type LIST_ENTRY
+    '     Flink As LongPtr
+    '     Blink As LongPtr
+    ' End Type
+    ' Public Type SLIST_HEADER
+    '     Alignment As LongLong
+    ' End Type
+
+    [ Description ("NtGlobalFlag flags. Flags for all versions from 3.51+ are included; it's up to you to know which are applicable for the current PEB version.") ]
+    Public Enum NTGLB_Flags
+        FLG_STOP_ON_EXCEPTION = &H00000001
+        FLG_SHOW_LDR_SNAPS = &H00000002
+        FLG_DEBUG_INITIAL_COMMAND = &H00000004
+        FLG_STOP_ON_HUNG_GUI = &H00000008
+        FLG_HEAP_ENABLE_TAIL_CHECK = &H00000010
+        FLG_HEAP_ENABLE_FREE_CHECK = &H00000020
+        FLG_HEAP_VALIDATE_PARAMETERS = &H00000040
+        FLG_HEAP_VALIDATE_ALL = &H00000080
+        FLG_POOL_ENABLE_TAIL_CHECK = &H00000100 '3.51 to 5.0
+        FLG_APPLICATION_VERIFIER = &H00000100 '5.1+
+        FLG_MONITOR_SILENT_PROCESS_EXIT = &H00000200 '6.1+ only
+        FLG_POOL_ENABLE_TAGGING = &H00000400
+        FLG_HEAP_ENABLE_TAGGING = &H00000800
+        FLG_USER_STACK_TRACE_DB = &H00001000
+        FLG_KERNEL_STACK_TRACE_DB = &H00002000
+        FLG_MAINTAIN_OBJECT_TYPELIST = &H00004000
+        FLG_HEAP_ENABLE_TAG_BY_DLL = &H00008000&
+        FLG_IGNORE_DEBUG_PRIV = &H00010000 '3.51 to 4.0
+        FLG_DISABLE_STACK_EXTENSION = &H00010000 '5.1+(5.0 is undef)
+        FLG_ENABLE_CSRDEBUG = &H00020000
+        FLG_ENABLE_KDEBUG_SYMBOL_LOAD = &H00040000
+        FLG_DISABLE_PAGE_KERNEL_STACKS = &H00080000
+        FLG_HEAP_ENABLE_CALL_TRACING = &H00100000 '3.51 to 4.0
+        FLG_ENABLE_SYSTEM_CRIT_BREAKS = &H00100000 '5.1+ (5.0 is undef)
+        FLG_HEAP_DISABLE_COALESCING = &H00200000
+        FLG_ENABLE_CLOSE_EXCEPTIONS = &H00400000 '4.0+
+        FLG_ENABLE_EXCEPTION_LOGGING = &H00800000 '4.0+
+        FLG_ENABLE_HANDLE_TYPE_TAGGING = &H01000000 '4.0+
+        FLG_HEAP_PAGE_ALLOCS = &H02000000 '4.0+
+        FLG_DEBUG_INITIAL_COMMAND_EX = &H04000000 '4.0+
+        FLG_DISABLE_DBGPRINT = &H08000000 '5.0+
+        FLG_CRITSEC_EVENT_CREATION = &H10000000 '5.0+
+        FLG_LDR_TOP_DOWN = &H20000000 '5.1-6.2
+        FLG_STOP_ON_UNHANDLED_EXCEPTION = &H20000000 '6.3+
+        FLG_ENABLE_HANDLE_EXCEPTIONS = &H40000000 '5.1+
+        FLG_DISABLE_PROTDLLS = &H80000000& '5.0+
+    End Enum
+
+    #Region "PEB/UPP"
+    [ Description ("RTL_USER_PROCESS_PARAMETERS for Windows XP and Server 2003 and above.") ]
+    Public Type RTL_USER_PROCESS_PARAMETERS_XP
+        MaximumLength As Long
+        Length As Long
+        Flags As Long
+        DebugFlags As Long
+        ConsoleHandle As LongPtr
+        ConsoleFlags As Long
+        StandardInput As LongPtr
+        StandardOutput As LongPtr
+        StandardError As LongPtr
+        CurrentDirectory As CURDIR
+        DllPath As UNICODE_STRING
+        ImagePathName As UNICODE_STRING
+        CommandLine As UNICODE_STRING
+        Environment As LongPtr
+        StartingX As Long
+        StartingY As Long
+        CountX As Long
+        CountY As Long
+        CountCharsX As Long
+        CountCharsY As Long
+        FillAttribute As Long
+        WindowFlags As Long
+        ShowWindowFlags As Long
+        WindowTitle As UNICODE_STRING
+        DesktopInfo As UNICODE_STRING
+        ShellInfo As UNICODE_STRING
+        RuntimeData As UNICODE_STRING
+        CurrentDirectores(31) As RTL_DRIVE_LETTER_CURDIR
+    End Type
+    [ Description ("RTL_USER_PROCESS_PARAMETERS for Windows Vista or higher") ]
+    Public Type RTL_USER_PROCESS_PARAMETERS
+        MaximumLength As Long
+        Length As Long
+        Flags As Long
+        DebugFlags As Long
+        ConsoleHandle As LongPtr
+        ConsoleFlags As Long
+        StandardInput As LongPtr
+        StandardOutput As LongPtr
+        StandardError As LongPtr
+        CurrentDirectory As CURDIR
+        DllPath As UNICODE_STRING
+        ImagePathName As UNICODE_STRING
+        CommandLine As UNICODE_STRING
+        Environment As LongPtr
+        StartingX As Long
+        StartingY As Long
+        CountX As Long
+        CountY As Long
+        CountCharsX As Long
+        CountCharsY As Long
+        FillAttribute As Long
+        WindowFlags As Long
+        ShowWindowFlags As Long
+        WindowTitle As UNICODE_STRING
+        DesktopInfo As UNICODE_STRING
+        ShellInfo As UNICODE_STRING
+        RuntimeData As UNICODE_STRING
+        CurrentDirectores(31) As RTL_DRIVE_LETTER_CURDIR
+        EnvironmentSize As LongPtr
+    End Type
+    [ Description ("RTL_USER_PROCESS_PARAMETERS for Windows 7+") ]
+    Public Type RTL_USER_PROCESS_PARAMETERS_WIN7
+        MaximumLength As Long
+        Length As Long
+        Flags As Long
+        DebugFlags As Long
+        ConsoleHandle As LongPtr
+        ConsoleFlags As Long
+        StandardInput As LongPtr
+        StandardOutput As LongPtr
+        StandardError As LongPtr
+        CurrentDirectory As CURDIR
+        DllPath As UNICODE_STRING
+        ImagePathName As UNICODE_STRING
+        CommandLine As UNICODE_STRING
+        Environment As LongPtr
+        StartingX As Long
+        StartingY As Long
+        CountX As Long
+        CountY As Long
+        CountCharsX As Long
+        CountCharsY As Long
+        FillAttribute As Long
+        WindowFlags As Long
+        ShowWindowFlags As Long
+        WindowTitle As UNICODE_STRING
+        DesktopInfo As UNICODE_STRING
+        ShellInfo As UNICODE_STRING
+        RuntimeData As UNICODE_STRING
+        CurrentDirectores(31) As RTL_DRIVE_LETTER_CURDIR
+        EnvironmentSize As LongPtr
+        EnvironmentVersion As LongPtr
+    End Type
+    [ Description ("RTL_USER_PROCESS_PARAMETERS for Windows 8+") ]
+    Public Type RTL_USER_PROCESS_PARAMETERS_WIN8
+        MaximumLength As Long
+        Length As Long
+        Flags As Long
+        DebugFlags As Long
+        ConsoleHandle As LongPtr
+        ConsoleFlags As Long
+        StandardInput As LongPtr
+        StandardOutput As LongPtr
+        StandardError As LongPtr
+        CurrentDirectory As CURDIR
+        DllPath As UNICODE_STRING
+        ImagePathName As UNICODE_STRING
+        CommandLine As UNICODE_STRING
+        Environment As LongPtr
+        StartingX As Long
+        StartingY As Long
+        CountX As Long
+        CountY As Long
+        CountCharsX As Long
+        CountCharsY As Long
+        FillAttribute As Long
+        WindowFlags As Long
+        ShowWindowFlags As Long
+        WindowTitle As UNICODE_STRING
+        DesktopInfo As UNICODE_STRING
+        ShellInfo As UNICODE_STRING
+        RuntimeData As UNICODE_STRING
+        CurrentDirectores(31) As RTL_DRIVE_LETTER_CURDIR
+        EnvironmentSize As LongPtr
+        EnvironmentVersion As LongPtr
+        PackageDependencyData As LongPtr
+        ProcessGroupId As Long
+    End Type
+    [ Description ("RTL_USER_PROCESS_PARAMETERS for Windows 10+") ]
+    Public Type RTL_USER_PROCESS_PARAMETERS_WIN10
+        MaximumLength As Long
+        Length As Long
+        Flags As Long
+        DebugFlags As Long
+        ConsoleHandle As LongPtr
+        ConsoleFlags As Long
+        StandardInput As LongPtr
+        StandardOutput As LongPtr
+        StandardError As LongPtr
+        CurrentDirectory As CURDIR
+        DllPath As UNICODE_STRING
+        ImagePathName As UNICODE_STRING
+        CommandLine As UNICODE_STRING
+        Environment As LongPtr
+        StartingX As Long
+        StartingY As Long
+        CountX As Long
+        CountY As Long
+        CountCharsX As Long
+        CountCharsY As Long
+        FillAttribute As Long
+        WindowFlags As Long
+        ShowWindowFlags As Long
+        WindowTitle As UNICODE_STRING
+        DesktopInfo As UNICODE_STRING
+        ShellInfo As UNICODE_STRING
+        RuntimeData As UNICODE_STRING
+        CurrentDirectores(31) As RTL_DRIVE_LETTER_CURDIR
+        EnvironmentSize As LongPtr
+        EnvironmentVersion As LongPtr
+        PackageDependencyData As LongPtr
+        ProcessGroupId As Long
+        LoaderThreads As Long
+    End Type
+    [ Description ("RTL_USER_PROCESS_PARAMETERS for Windows 10 Redstone 5 1809+") ]
+    Public Type RTL_USER_PROCESS_PARAMETERS_WIN10_R5
+        MaximumLength As Long
+        Length As Long
+        Flags As Long
+        DebugFlags As Long
+        ConsoleHandle As LongPtr
+        ConsoleFlags As Long
+        StandardInput As LongPtr
+        StandardOutput As LongPtr
+        StandardError As LongPtr
+        CurrentDirectory As CURDIR
+        DllPath As UNICODE_STRING
+        ImagePathName As UNICODE_STRING
+        CommandLine As UNICODE_STRING
+        Environment As LongPtr
+        StartingX As Long
+        StartingY As Long
+        CountX As Long
+        CountY As Long
+        CountCharsX As Long
+        CountCharsY As Long
+        FillAttribute As Long
+        WindowFlags As Long
+        ShowWindowFlags As Long
+        WindowTitle As UNICODE_STRING
+        DesktopInfo As UNICODE_STRING
+        ShellInfo As UNICODE_STRING
+        RuntimeData As UNICODE_STRING
+        CurrentDirectores(31) As RTL_DRIVE_LETTER_CURDIR
+        EnvironmentSize As LongPtr
+        EnvironmentVersion As LongPtr
+        PackageDependencyData As LongPtr
+        ProcessGroupId As Long
+        LoaderThreads As Long
+        RedirectionDllName As UNICODE_STRING
+    End Type
+    [ Description ("RTL_USER_PROCESS_PARAMETERS for Windows 10 19H1 1903+") ]
+    Public Type RTL_USER_PROCESS_PARAMETERS_WIN10_19H1
+        MaximumLength As Long
+        Length As Long
+        Flags As Long
+        DebugFlags As Long
+        ConsoleHandle As LongPtr
+        ConsoleFlags As Long
+        StandardInput As LongPtr
+        StandardOutput As LongPtr
+        StandardError As LongPtr
+        CurrentDirectory As CURDIR
+        DllPath As UNICODE_STRING
+        ImagePathName As UNICODE_STRING
+        CommandLine As UNICODE_STRING
+        Environment As LongPtr
+        StartingX As Long
+        StartingY As Long
+        CountX As Long
+        CountY As Long
+        CountCharsX As Long
+        CountCharsY As Long
+        FillAttribute As Long
+        WindowFlags As Long
+        ShowWindowFlags As Long
+        WindowTitle As UNICODE_STRING
+        DesktopInfo As UNICODE_STRING
+        ShellInfo As UNICODE_STRING
+        RuntimeData As UNICODE_STRING
+        CurrentDirectores(31) As RTL_DRIVE_LETTER_CURDIR
+        EnvironmentSize As LongPtr
+        EnvironmentVersion As LongPtr
+        PackageDependencyData As LongPtr
+        ProcessGroupId As Long
+        LoaderThreads As Long
+        RedirectionDllName As UNICODE_STRING
+        HeapPartitionName As UNICODE_STRING
+        DefaultThreadpoolCpuSetMasks As LongLong
+        DefaultThreadpoolCpuSetMaskCount As Long
+    End Type
+    [ Description ("RTL_USER_PROCESS_PARAMETERS for Windows 10 20H1 2004+") ]
+    Public Type RTL_USER_PROCESS_PARAMETERS_WIN10_20H1
+        MaximumLength As Long
+        Length As Long
+        Flags As Long
+        DebugFlags As Long
+        ConsoleHandle As LongPtr
+        ConsoleFlags As Long
+        StandardInput As LongPtr
+        StandardOutput As LongPtr
+        StandardError As LongPtr
+        CurrentDirectory As CURDIR
+        DllPath As UNICODE_STRING
+        ImagePathName As UNICODE_STRING
+        CommandLine As UNICODE_STRING
+        Environment As LongPtr
+        StartingX As Long
+        StartingY As Long
+        CountX As Long
+        CountY As Long
+        CountCharsX As Long
+        CountCharsY As Long
+        FillAttribute As Long
+        WindowFlags As Long
+        ShowWindowFlags As Long
+        WindowTitle As UNICODE_STRING
+        DesktopInfo As UNICODE_STRING
+        ShellInfo As UNICODE_STRING
+        RuntimeData As UNICODE_STRING
+        CurrentDirectores(31) As RTL_DRIVE_LETTER_CURDIR
+        EnvironmentSize As LongPtr
+        EnvironmentVersion As LongPtr
+        PackageDependencyData As LongPtr
+        ProcessGroupId As Long
+        LoaderThreads As Long
+        RedirectionDllName As UNICODE_STRING
+        HeapPartitionName As UNICODE_STRING
+        DefaultThreadpoolCpuSetMasks As LongLong
+        DefaultThreadpoolCpuSetMaskCount As Long
+        DefaultThreadpoolThreadMaximum As Long
+    End Type
+    [ Description ("RTL_USER_PROCESS_PARAMETERS for Windows 11 21H2+") ]
+    Public Type RTL_USER_PROCESS_PARAMETERS_WIN11_21H2
+        MaximumLength As Long
+        Length As Long
+        Flags As Long
+        DebugFlags As Long
+        ConsoleHandle As LongPtr
+        ConsoleFlags As Long
+        StandardInput As LongPtr
+        StandardOutput As LongPtr
+        StandardError As LongPtr
+        CurrentDirectory As CURDIR
+        DllPath As UNICODE_STRING
+        ImagePathName As UNICODE_STRING
+        CommandLine As UNICODE_STRING
+        Environment As LongPtr
+        StartingX As Long
+        StartingY As Long
+        CountX As Long
+        CountY As Long
+        CountCharsX As Long
+        CountCharsY As Long
+        FillAttribute As Long
+        WindowFlags As Long
+        ShowWindowFlags As Long
+        WindowTitle As UNICODE_STRING
+        DesktopInfo As UNICODE_STRING
+        ShellInfo As UNICODE_STRING
+        RuntimeData As UNICODE_STRING
+        CurrentDirectores(31) As RTL_DRIVE_LETTER_CURDIR
+        EnvironmentSize As LongPtr
+        EnvironmentVersion As LongPtr
+        PackageDependencyData As LongPtr
+        ProcessGroupId As Long
+        LoaderThreads As Long
+        RedirectionDllName As UNICODE_STRING
+        HeapPartitionName As UNICODE_STRING
+        DefaultThreadpoolCpuSetMasks As LongLong
+        DefaultThreadpoolCpuSetMaskCount As Long
+        DefaultThreadpoolThreadMaximum As Long
+        HeapMemoryTypeMask As Long
+    End Type
+
+
+    Public Type PEB_XP
+        InheritedAddressSpace As Byte
+        ReadImageFileExecOptions As Byte
+        BeingDebugged As Byte
+        BitField As Byte
+        Mutant As LongPtr
+        ImageBaseAddress As LongPtr
+        Ldr As LongPtr
+        ProcessParameters As LongPtr 'RTL_USER_PROCESS_PARAMETERS
+        SubSystemData As LongPtr
+        ProcessHeap As LongPtr
+        FastPebLock As LongPtr
+        AtlThunkSListPtr As LongPtr
+        SparePtr2 As LongPtr
+        EnvironmentUpdateCount As Long
+        KernelCallbackTable As LongPtr
+        SystemReserved(0) As Long
+        SpareUlong As Long
+        FreeList As LongPtr
+        TlsExpansionCounter As Long
+        TlsBitmap As LongPtr
+        TlsBitmapBits(1) As Long
+        ReadOnlySharedMemoryBase As LongPtr
+        ReadOnlySharedMemoryHeap As LongPtr
+        ReadOnlyStaticServerData As LongPtr
+        AnsiCodePageData As LongPtr
+        OemCodePageData As LongPtr
+        UnicodeCaseTableData As LongPtr
+        NumberOfProcessors As Long
+        NtGlobalFlag As NTGLB_Flags
+        CriticalSectionTimeout As LARGE_INTEGER
+        HeapSegmentReserve As LongPtr
+        HeapSegmentCommit As LongPtr
+        HeapDeCommitTotalFreeThreshold As LongPtr
+        HeapDeCommitFreeBlockThreshold As LongPtr
+        NumberOfHeaps As Long
+        MaximumNumberOfHeaps As Long
+        ProcessHeaps As LongPtr
+        GdiSharedHandleTable As LongPtr
+        ProcessStarterHelper As LongPtr
+        GdiDCAttributeList As Long
+        LoaderLock As LongPtr
+        OSMajorVersion As Long
+        OSMinorVersion As Long
+        OSBuildNumber As Integer
+        OSCSDVersion As Integer
+        OSPlatformId As Long
+        ImageSubsystem As Long
+        ImageSubsystemMajorVersion As Long
+        ImageSubsystemMinorVersion As Long
+        ImageProcessAffinityMask As LongPtr
+        #If Win64 Then
+        GdiHandleBuffer(59) As Long
+        #Else
+        GdiHandleBuffer(33) As Long
+        #End If
+        PostProcessInitRoutine As LongPtr
+        TlsExpansionBitmap As LongPtr
+        TlsExpansionBitmapBits(31) As Long
+        SessionId As Long
+        AppCompatFlags As ULARGE_INTEGER
+        AppCompatFlagUser As ULARGE_INTEGER
+        pShimData As LongPtr
+        AppCompatInfo As LongPtr
+        CSDVersion As UNICODE_STRING
+        ActivationContextData As LongPtr
+        ProcessAssemblyStorageMap As LongPtr
+        SystemDefaultActivationContextData As LongPtr
+        SystemAssemblyStorageMap As LongPtr
+        MinimumStackCommit As LongPtr
+        #If Win64 Then
+        FlsCallback As LongPtr
+        FlsListHead As LIST_ENTRY
+        FlsBitmap As LongPtr
+        FlsBitmapBits(3) As Long
+        FlsHighIndex As Long
+        #End If
+    End Type
+
+    [ Description ("PEB for Windows Vista and Server 2003") ]
+    Public Type PEB_VISTA 'Also 2003
+        InheritedAddressSpace As Byte
+        ReadImageFileExecOptions As Byte
+        BeingDebugged As Byte
+        BitField As Byte
+        Mutant As LongPtr
+        ImageBaseAddress As LongPtr
+        Ldr As LongPtr
+        ProcessParameters As LongPtr 'RTL_USER_PROCESS_PARAMETERS
+        SubSystemData As LongPtr
+        ProcessHeap As LongPtr
+        FastPebLock As LongPtr
+        AtlThunkSListPtr As LongPtr
+        IFEOKey As LongPtr
+        CPFlagsOrProcInJbInitBits As Long
+        KernelCallbackTableOrUserShrdInfoPtr As LongPtr
+        SystemReserved(0) As Long
+        SpareUlong As Long
+        FreeList As LongPtr 'Invalid in SP2
+        TlsExpansionCounter As Long
+        TlsBitmap As LongPtr
+        TlsBitmapBits(1) As Long
+        ReadOnlySharedMemoryBase As LongPtr
+        HotpatchInformation As LongPtr
+        ReadOnlyStaticServerData As LongPtr
+        AnsiCodePageData As LongPtr
+        OemCodePageData As LongPtr
+        UnicodeCaseTableData As LongPtr
+        NumberOfProcessors As Long
+        NtGlobalFlag As NTGLB_Flags
+        CriticalSectionTimeout As LARGE_INTEGER
+        HeapSegmentReserve As LongPtr
+        HeapSegmentCommit As LongPtr
+        HeapDeCommitTotalFreeThreshold As LongPtr
+        HeapDeCommitFreeBlockThreshold As LongPtr
+        NumberOfHeaps As Long
+        MaximumNumberOfHeaps As Long
+        ProcessHeaps As LongPtr
+        GdiSharedHandleTable As LongPtr
+        ProcessStarterHelper As LongPtr
+        GdiDCAttributeList As Long
+        LoaderLock As LongPtr
+        OSMajorVersion As Long
+        OSMinorVersion As Long
+        OSBuildNumber As Integer
+        OSCSDVersion As Integer
+        OSPlatformId As Long
+        ImageSubsystem As Long
+        ImageSubsystemMajorVersion As Long
+        ImageSubsystemMinorVersion As Long
+        ImageProcessAffinityMask As LongPtr 'ActiveProcessAffinityMask in SP2
+        #If Win64 Then
+        GdiHandleBuffer(59) As Long
+        #Else
+        GdiHandleBuffer(33) As Long
+        #End If
+        PostProcessInitRoutine As LongPtr
+        TlsExpansionBitmap As LongPtr
+        TlsExpansionBitmapBits(31) As Long
+        SessionId As Long
+        AppCompatFlags As ULARGE_INTEGER
+        AppCompatFlagUser As ULARGE_INTEGER
+        pShimData As LongPtr
+        AppCompatInfo As LongPtr
+        CSDVersion As UNICODE_STRING
+        ActivationContextData As LongPtr
+        ProcessAssemblyStorageMap As LongPtr
+        SystemDefaultActivationContextData As LongPtr
+        SystemAssemblyStorageMap As LongPtr
+        MinimumStackCommit As LongPtr
+        FlsCallback As LongPtr
+        FlsListHead As LIST_ENTRY
+        FlsBitmap As LongPtr
+        FlsBitmapBits(3) As Long
+        FlsHighIndex As Long
+        WerRegistrationData As LongPtr
+        WerShipAssertPtr As LongPtr
+    End Type
+    [ Description ("PEB for Windows 7 and Server 2008") ]
+    Public Type PEB_WIN7
+        InheritedAddressSpace As Byte
+        ReadImageFileExecOptions As Byte
+        BeingDebugged As Byte
+        BitField As Byte
+        Mutant As LongPtr
+        ImageBaseAddress As LongPtr
+        Ldr As LongPtr
+        ProcessParameters As LongPtr 'RTL_USER_PROCESS_PARAMETERS
+        SubSystemData As LongPtr
+        ProcessHeap As LongPtr
+        FastPebLock As LongPtr
+        AtlThunkSListPtr As LongPtr
+        IFEOKey As LongPtr
+        CPFlagsOrProcInJbInitBits As Long
+        KernelCallbackTableOrUserShrdInfoPtr As LongPtr
+        SystemReserved(0) As Long
+        AtlThunkSListPtr32 As Long
+        ApiSetMap As LongPtr
+        TlsExpansionCounter As Long
+        TlsBitmap As LongPtr
+        TlsBitmapBits(1) As Long
+        ReadOnlySharedMemoryBase As LongPtr
+        HotpatchInformation As LongPtr
+        ReadOnlyStaticServerData As LongPtr
+        AnsiCodePageData As LongPtr
+        OemCodePageData As LongPtr
+        UnicodeCaseTableData As LongPtr
+        NumberOfProcessors As Long
+        NtGlobalFlag As NTGLB_Flags
+        CriticalSectionTimeout As LARGE_INTEGER
+        HeapSegmentReserve As LongPtr
+        HeapSegmentCommit As LongPtr
+        HeapDeCommitTotalFreeThreshold As LongPtr
+        HeapDeCommitFreeBlockThreshold As LongPtr
+        NumberOfHeaps As Long
+        MaximumNumberOfHeaps As Long
+        ProcessHeaps As LongPtr
+        GdiSharedHandleTable As LongPtr
+        ProcessStarterHelper As LongPtr
+        GdiDCAttributeList As Long
+        LoaderLock As LongPtr
+        OSMajorVersion As Long
+        OSMinorVersion As Long
+        OSBuildNumber As Integer
+        OSCSDVersion As Integer
+        OSPlatformId As Long
+        ImageSubsystem As Long
+        ImageSubsystemMajorVersion As Long
+        ImageSubsystemMinorVersion As Long
+        ActiveProcessAffinityMask As LongPtr
+        #If Win64 Then
+        GdiHandleBuffer(59) As Long
+        #Else
+        GdiHandleBuffer(33) As Long
+        #End If
+        PostProcessInitRoutine As LongPtr
+        TlsExpansionBitmap As LongPtr
+        TlsExpansionBitmapBits(31) As Long
+        SessionId As Long
+        AppCompatFlags As ULARGE_INTEGER
+        AppCompatFlagUser As ULARGE_INTEGER
+        pShimData As LongPtr
+        AppCompatInfo As LongPtr
+        CSDVersion As UNICODE_STRING
+        ActivationContextData As LongPtr
+        ProcessAssemblyStorageMap As LongPtr
+        SystemDefaultActivationContextData As LongPtr
+        SystemAssemblyStorageMap As LongPtr
+        MinimumStackCommit As LongPtr
+        FlsCallback As LongPtr
+        FlsListHead As LIST_ENTRY
+        FlsBitmap As LongPtr
+        FlsBitmapBits(3) As Long
+        FlsHighIndex As Long
+        WerRegistrationData As LongPtr
+        WerShipAssertPtr As LongPtr
+        pContextData As LongPtr
+        pImageHeaderHash As LongPtr
+        TracingFlagsOrTraceEnabledBits As Long
+    End Type
+    [ Description ("PEB for Windows 8, 8.1, Server 2012, and Windows 10 Threshold 1") ]
+    Public Type PEB_WIN8
+        InheritedAddressSpace As Byte
+        ReadImageFileExecOptions As Byte
+        BeingDebugged As Byte
+        BitField As Byte
+        Mutant As LongPtr
+        ImageBaseAddress As LongPtr
+        Ldr As LongPtr
+        ProcessParameters As LongPtr 'RTL_USER_PROCESS_PARAMETERS
+        SubSystemData As LongPtr
+        ProcessHeap As LongPtr
+        FastPebLock As LongPtr
+        AtlThunkSListPtr As LongPtr
+        IFEOKey As LongPtr
+        CPFlagsOrProcInJbInitBits As Long
+        KernelCallbackTableOrUserShrdInfoPtr As LongPtr
+        SystemReserved(0) As Long
+        AtlThunkSListPtr32 As Long
+        ApiSetMap As LongPtr
+        TlsExpansionCounter As Long
+        TlsBitmap As LongPtr
+        TlsBitmapBits(1) As Long
+        ReadOnlySharedMemoryBase As LongPtr
+        SparePvoid0 As LongPtr
+        ReadOnlyStaticServerData As LongPtr
+        AnsiCodePageData As LongPtr
+        OemCodePageData As LongPtr
+        UnicodeCaseTableData As LongPtr
+        NumberOfProcessors As Long
+        NtGlobalFlag As NTGLB_Flags
+        CriticalSectionTimeout As LARGE_INTEGER
+        HeapSegmentReserve As LongPtr
+        HeapSegmentCommit As LongPtr
+        HeapDeCommitTotalFreeThreshold As LongPtr
+        HeapDeCommitFreeBlockThreshold As LongPtr
+        NumberOfHeaps As Long
+        MaximumNumberOfHeaps As Long
+        ProcessHeaps As LongPtr
+        GdiSharedHandleTable As LongPtr
+        ProcessStarterHelper As LongPtr
+        GdiDCAttributeList As Long
+        LoaderLock As LongPtr
+        OSMajorVersion As Long
+        OSMinorVersion As Long
+        OSBuildNumber As Integer
+        OSCSDVersion As Integer
+        OSPlatformId As Long
+        ImageSubsystem As Long
+        ImageSubsystemMajorVersion As Long
+        ImageSubsystemMinorVersion As Long
+        ActiveProcessAffinityMask As LongPtr
+        #If Win64 Then
+        GdiHandleBuffer(59) As Long
+        #Else
+        GdiHandleBuffer(33) As Long
+        #End If
+        PostProcessInitRoutine As LongPtr
+        TlsExpansionBitmap As LongPtr
+        TlsExpansionBitmapBits(31) As Long
+        SessionId As Long
+        AppCompatFlags As ULARGE_INTEGER
+        AppCompatFlagUser As ULARGE_INTEGER
+        pShimData As LongPtr
+        AppCompatInfo As LongPtr
+        CSDVersion As UNICODE_STRING
+        ActivationContextData As LongPtr
+        ProcessAssemblyStorageMap As LongPtr
+        SystemDefaultActivationContextData As LongPtr
+        SystemAssemblyStorageMap As LongPtr
+        MinimumStackCommit As LongPtr
+        FlsCallback As LongPtr
+        FlsListHead As LIST_ENTRY
+        FlsBitmap As LongPtr
+        FlsBitmapBits(3) As Long
+        FlsHighIndex As Long
+        WerRegistrationData As LongPtr
+        WerShipAssertPtr As LongPtr
+        pUnused As LongPtr
+        pImageHeaderHash As LongPtr
+        TracingFlagsOrTraceEnabledBits As Long
+        CsrServerReadOnlySharedMemoryBase As LongLong
+    End Type
+
+    [ Description ("PEB for Windows 10 Threshold 2 through Redstone 2") ]
+    Public Type PEB_WIN10_T2
+        InheritedAddressSpace As Byte
+        ReadImageFileExecOptions As Byte
+        BeingDebugged As Byte
+        BitField As Byte
+        Mutant As LongPtr
+        ImageBaseAddress As LongPtr
+        Ldr As LongPtr
+        ProcessParameters As LongPtr 'RTL_USER_PROCESS_PARAMETERS
+        SubSystemData As LongPtr
+        ProcessHeap As LongPtr
+        FastPebLock As LongPtr
+        AtlThunkSListPtr As LongPtr
+        IFEOKey As LongPtr
+        CPFlagsOrProcInJbInitBits As Long
+        KernelCallbackTableOrUserShrdInfoPtr As LongPtr
+        SystemReserved(0) As Long
+        AtlThunkSListPtr32 As Long
+        ApiSetMap As LongPtr
+        TlsExpansionCounter As Long
+        TlsBitmap As LongPtr
+        TlsBitmapBits(1) As Long
+        ReadOnlySharedMemoryBase As LongPtr
+        SparePvoid0 As LongPtr
+        ReadOnlyStaticServerData As LongPtr
+        AnsiCodePageData As LongPtr
+        OemCodePageData As LongPtr
+        UnicodeCaseTableData As LongPtr
+        NumberOfProcessors As Long
+        NtGlobalFlag As NTGLB_Flags
+        CriticalSectionTimeout As LARGE_INTEGER
+        HeapSegmentReserve As LongPtr
+        HeapSegmentCommit As LongPtr
+        HeapDeCommitTotalFreeThreshold As LongPtr
+        HeapDeCommitFreeBlockThreshold As LongPtr
+        NumberOfHeaps As Long
+        MaximumNumberOfHeaps As Long
+        ProcessHeaps As LongPtr
+        GdiSharedHandleTable As LongPtr
+        ProcessStarterHelper As LongPtr
+        GdiDCAttributeList As Long
+        LoaderLock As LongPtr
+        OSMajorVersion As Long
+        OSMinorVersion As Long
+        OSBuildNumber As Integer
+        OSCSDVersion As Integer
+        OSPlatformId As Long
+        ImageSubsystem As Long
+        ImageSubsystemMajorVersion As Long
+        ImageSubsystemMinorVersion As Long
+        ActiveProcessAffinityMask As LongPtr
+        #If Win64 Then
+        GdiHandleBuffer(59) As Long
+        #Else
+        GdiHandleBuffer(33) As Long
+        #End If
+        PostProcessInitRoutine As LongPtr
+        TlsExpansionBitmap As LongPtr
+        TlsExpansionBitmapBits(31) As Long
+        SessionId As Long
+        AppCompatFlags As ULARGE_INTEGER
+        AppCompatFlagUser As ULARGE_INTEGER
+        pShimData As LongPtr
+        AppCompatInfo As LongPtr
+        CSDVersion As UNICODE_STRING
+        ActivationContextData As LongPtr
+        ProcessAssemblyStorageMap As LongPtr
+        SystemDefaultActivationContextData As LongPtr
+        SystemAssemblyStorageMap As LongPtr
+        MinimumStackCommit As LongPtr
+        FlsCallback As LongPtr
+        FlsListHead As LIST_ENTRY
+        FlsBitmap As LongPtr
+        FlsBitmapBits(3) As Long
+        FlsHighIndex As Long
+        WerRegistrationData As LongPtr
+        WerShipAssertPtr As LongPtr
+        pUnused As LongPtr
+        pImageHeaderHash As LongPtr
+        TracingFlagsOrTraceEnabledBits As Long
+        CsrServerReadOnlySharedMemoryBase As LongLong
+        TppWorkerpListLock As LongPtr
+        TppWorkerpList As LIST_ENTRY
+        WaitOnAddressHashTable(0 To 127) As LongPtr
+    End Type
+
+    [ Description ("PEB for Windows Windows 10 Redstone 3/1703 Creators Update") ]
+    Public Type PEB_WIN10_R3
+        InheritedAddressSpace As Byte
+        ReadImageFileExecOptions As Byte
+        BeingDebugged As Byte
+        BitField As Byte
+        Mutant As LongPtr
+        ImageBaseAddress As LongPtr
+        Ldr As LongPtr
+        ProcessParameters As LongPtr 'RTL_USER_PROCESS_PARAMETERS
+        SubSystemData As LongPtr
+        ProcessHeap As LongPtr
+        FastPebLock As LongPtr
+        AtlThunkSListPtr As LongPtr
+        IFEOKey As LongPtr
+        CPFlagsOrProcInJbInitBits As Long
+        KernelCallbackTableOrUserShrdInfoPtr As LongPtr
+        SystemReserved(0) As Long
+        AtlThunkSListPtr32 As Long
+        ApiSetMap As LongPtr
+        TlsExpansionCounter As Long
+        TlsBitmap As LongPtr
+        TlsBitmapBits(1) As Long
+        ReadOnlySharedMemoryBase As LongPtr
+        SharedData As LongPtr
+        ReadOnlyStaticServerData As LongPtr
+        AnsiCodePageData As LongPtr
+        OemCodePageData As LongPtr
+        UnicodeCaseTableData As LongPtr
+        NumberOfProcessors As Long
+        NtGlobalFlag As NTGLB_Flags
+        CriticalSectionTimeout As LARGE_INTEGER
+        HeapSegmentReserve As LongPtr
+        HeapSegmentCommit As LongPtr
+        HeapDeCommitTotalFreeThreshold As LongPtr
+        HeapDeCommitFreeBlockThreshold As LongPtr
+        NumberOfHeaps As Long
+        MaximumNumberOfHeaps As Long
+        ProcessHeaps As LongPtr
+        GdiSharedHandleTable As LongPtr
+        ProcessStarterHelper As LongPtr
+        GdiDCAttributeList As Long
+        LoaderLock As LongPtr
+        OSMajorVersion As Long
+        OSMinorVersion As Long
+        OSBuildNumber As Integer
+        OSCSDVersion As Integer
+        OSPlatformId As Long
+        ImageSubsystem As Long
+        ImageSubsystemMajorVersion As Long
+        ImageSubsystemMinorVersion As Long
+        ActiveProcessAffinityMask As LongPtr
+        #If Win64 Then
+        GdiHandleBuffer(59) As Long
+        #Else
+        GdiHandleBuffer(33) As Long
+        #End If
+        PostProcessInitRoutine As LongPtr
+        TlsExpansionBitmap As LongPtr
+        TlsExpansionBitmapBits(31) As Long
+        SessionId As Long
+        AppCompatFlags As ULARGE_INTEGER
+        AppCompatFlagUser As ULARGE_INTEGER
+        pShimData As LongPtr
+        AppCompatInfo As LongPtr
+        CSDVersion As UNICODE_STRING
+        ActivationContextData As LongPtr
+        ProcessAssemblyStorageMap As LongPtr
+        SystemDefaultActivationContextData As LongPtr
+        SystemAssemblyStorageMap As LongPtr
+        MinimumStackCommit As LongPtr
+        FlsCallback As LongPtr
+        FlsListHead As LIST_ENTRY
+        FlsBitmap As LongPtr
+        FlsBitmapBits(3) As Long
+        FlsHighIndex As Long
+        WerRegistrationData As LongPtr
+        WerShipAssertPtr As LongPtr
+        pUnused As LongPtr
+        pImageHeaderHash As LongPtr
+        TracingFlagsOrTraceEnabledBits As Long
+        CsrServerReadOnlySharedMemoryBase As LongLong
+        TppWorkerpListLock As LongPtr
+        TppWorkerpList As LIST_ENTRY
+        WaitOnAddressHashTable(0 To 127) As LongPtr
+        TelemetryCoverageHeader As LongPtr
+        CloudFileFlags As Long
+    End Type
+    [ Description ("PEB for Windows Windows 10 Redstone 4/1803 Spring Creators Update") ]
+    Public Type PEB_WIN10_R4
+        InheritedAddressSpace As Byte
+        ReadImageFileExecOptions As Byte
+        BeingDebugged As Byte
+        BitField As Byte
+        Mutant As LongPtr
+        ImageBaseAddress As LongPtr
+        Ldr As LongPtr
+        ProcessParameters As LongPtr 'RTL_USER_PROCESS_PARAMETERS
+        SubSystemData As LongPtr
+        ProcessHeap As LongPtr
+        FastPebLock As LongPtr
+        AtlThunkSListPtr As LongPtr
+        IFEOKey As LongPtr
+        CPFlagsOrProcInJbInitBits As Long
+        KernelCallbackTableOrUserShrdInfoPtr As LongPtr
+        SystemReserved(0) As Long
+        AtlThunkSListPtr32 As Long
+        ApiSetMap As LongPtr
+        TlsExpansionCounter As Long
+        TlsBitmap As LongPtr
+        TlsBitmapBits(1) As Long
+        ReadOnlySharedMemoryBase As LongPtr
+        SharedData As LongPtr
+        ReadOnlyStaticServerData As LongPtr
+        AnsiCodePageData As LongPtr
+        OemCodePageData As LongPtr
+        UnicodeCaseTableData As LongPtr
+        NumberOfProcessors As Long
+        NtGlobalFlag As NTGLB_Flags
+        CriticalSectionTimeout As LARGE_INTEGER
+        HeapSegmentReserve As LongPtr
+        HeapSegmentCommit As LongPtr
+        HeapDeCommitTotalFreeThreshold As LongPtr
+        HeapDeCommitFreeBlockThreshold As LongPtr
+        NumberOfHeaps As Long
+        MaximumNumberOfHeaps As Long
+        ProcessHeaps As LongPtr
+        GdiSharedHandleTable As LongPtr
+        ProcessStarterHelper As LongPtr
+        GdiDCAttributeList As Long
+        LoaderLock As LongPtr
+        OSMajorVersion As Long
+        OSMinorVersion As Long
+        OSBuildNumber As Integer
+        OSCSDVersion As Integer
+        OSPlatformId As Long
+        ImageSubsystem As Long
+        ImageSubsystemMajorVersion As Long
+        ImageSubsystemMinorVersion As Long
+        ActiveProcessAffinityMask As LongPtr
+        #If Win64 Then
+        GdiHandleBuffer(59) As Long
+        #Else
+        GdiHandleBuffer(33) As Long
+        #End If
+        PostProcessInitRoutine As LongPtr
+        TlsExpansionBitmap As LongPtr
+        TlsExpansionBitmapBits(31) As Long
+        SessionId As Long
+        AppCompatFlags As ULARGE_INTEGER
+        AppCompatFlagUser As ULARGE_INTEGER
+        pShimData As LongPtr
+        AppCompatInfo As LongPtr
+        CSDVersion As UNICODE_STRING
+        ActivationContextData As LongPtr
+        ProcessAssemblyStorageMap As LongPtr
+        SystemDefaultActivationContextData As LongPtr
+        SystemAssemblyStorageMap As LongPtr
+        MinimumStackCommit As LongPtr
+        FlsCallback As LongPtr
+        FlsListHead As LIST_ENTRY
+        FlsBitmap As LongPtr
+        FlsBitmapBits(3) As Long
+        FlsHighIndex As Long
+        WerRegistrationData As LongPtr
+        WerShipAssertPtr As LongPtr
+        pUnused As LongPtr
+        pImageHeaderHash As LongPtr
+        TracingFlagsOrTraceEnabledBits As Long
+        CsrServerReadOnlySharedMemoryBase As LongLong
+        TppWorkerpListLock As LongPtr
+        TppWorkerpList As LIST_ENTRY
+        WaitOnAddressHashTable(0 To 127) As LongPtr
+        TelemetryCoverageHeader As LongPtr
+        CloudFileFlags As Long
+        CloudFileDiagFlags As Long
+        PlaceholderCompatibilityMode As Byte
+        PlaceholderCompatibilityModeReserved(0 To 6) As Byte
+    End Type
+    [ Description ("PEB for Windows Windows 10 Redstone 5/1809 October Update through Windows 10 21H2/2110") ]
+    Public Type PEB_WIN10_R5
+        InheritedAddressSpace As Byte
+        ReadImageFileExecOptions As Byte
+        BeingDebugged As Byte
+        BitField As Byte
+        Mutant As LongPtr
+        ImageBaseAddress As LongPtr
+        Ldr As LongPtr
+        ProcessParameters As LongPtr 'RTL_USER_PROCESS_PARAMETERS
+        SubSystemData As LongPtr
+        ProcessHeap As LongPtr
+        FastPebLock As LongPtr
+        AtlThunkSListPtr As LongPtr
+        IFEOKey As LongPtr
+        CPFlagsOrProcInJbInitBits As Long
+        KernelCallbackTableOrUserShrdInfoPtr As LongPtr
+        SystemReserved(0) As Long
+        AtlThunkSListPtr32 As Long
+        ApiSetMap As LongPtr
+        TlsExpansionCounter As Long
+        TlsBitmap As LongPtr
+        TlsBitmapBits(1) As Long
+        ReadOnlySharedMemoryBase As LongPtr
+        SharedData As LongPtr
+        ReadOnlyStaticServerData As LongPtr
+        AnsiCodePageData As LongPtr
+        OemCodePageData As LongPtr
+        UnicodeCaseTableData As LongPtr
+        NumberOfProcessors As Long
+        NtGlobalFlag As Long
+        CriticalSectionTimeout As LARGE_INTEGER
+        HeapSegmentReserve As LongPtr
+        HeapSegmentCommit As LongPtr
+        HeapDeCommitTotalFreeThreshold As LongPtr
+        HeapDeCommitFreeBlockThreshold As LongPtr
+        NumberOfHeaps As Long
+        MaximumNumberOfHeaps As Long
+        ProcessHeaps As LongPtr
+        GdiSharedHandleTable As LongPtr
+        ProcessStarterHelper As LongPtr
+        GdiDCAttributeList As Long
+        LoaderLock As LongPtr
+        OSMajorVersion As Long
+        OSMinorVersion As Long
+        OSBuildNumber As Integer
+        OSCSDVersion As Integer
+        OSPlatformId As Long
+        ImageSubsystem As Long
+        ImageSubsystemMajorVersion As Long
+        ImageSubsystemMinorVersion As Long
+        ActiveProcessAffinityMask As LongPtr
+        #If Win64 Then
+        GdiHandleBuffer(59) As Long
+        #Else
+        GdiHandleBuffer(33) As Long
+        #End If
+        PostProcessInitRoutine As LongPtr
+        TlsExpansionBitmap As LongPtr
+        TlsExpansionBitmapBits(31) As Long
+        SessionId As Long
+        AppCompatFlags As ULARGE_INTEGER
+        AppCompatFlagUser As ULARGE_INTEGER
+        pShimData As LongPtr
+        AppCompatInfo As LongPtr
+        CSDVersion As UNICODE_STRING
+        ActivationContextData As LongPtr
+        ProcessAssemblyStorageMap As LongPtr
+        SystemDefaultActivationContextData As LongPtr
+        SystemAssemblyStorageMap As LongPtr
+        MinimumStackCommit As LongPtr
+        FlsCallback As LongPtr
+        FlsListHead As LIST_ENTRY
+        FlsBitmap As LongPtr
+        FlsBitmapBits(3) As Long
+        FlsHighIndex As Long
+        WerRegistrationData As LongPtr
+        WerShipAssertPtr As LongPtr
+        pUnused As LongPtr
+        pImageHeaderHash As LongPtr
+        TracingFlagsOrTraceEnabledBits As Long
+        CsrServerReadOnlySharedMemoryBase As LongLong
+        TppWorkerpListLock As LongPtr
+        TppWorkerpList As LIST_ENTRY
+        WaitOnAddressHashTable(0 To 127) As LongPtr
+        TelemetryCoverageHeader As LongPtr
+        CloudFileFlags As Long
+        CloudFileDiagFlags As Long
+        PlaceholderCompatibilityMode As Byte
+        PlaceholderCompatibilityModeReserved(0 To 6) As Byte
+        LeapSecondData As LongPtr
+        LeapSecondFlagsOrSixtySecondEnabled As Long
+        NtGlobalFlag2 As Long
+    End Type
+    [ Description ("PEB for Windows Windows 11 Insider Preview through Windows 11 22H2. Not verified on versions after that.") ]
+    Public Type PEB_WIN11
+        InheritedAddressSpace As Byte
+        ReadImageFileExecOptions As Byte
+        BeingDebugged As Byte
+        BitField As Byte
+        Mutant As LongPtr
+        ImageBaseAddress As LongPtr
+        Ldr As LongPtr
+        ProcessParameters As LongPtr 'RTL_USER_PROCESS_PARAMETERS
+        SubSystemData As LongPtr
+        ProcessHeap As LongPtr
+        FastPebLock As LongPtr
+        AtlThunkSListPtr As LongPtr
+        IFEOKey As LongPtr
+        CPFlagsOrProcInJbInitBits As Long
+        KernelCallbackTableOrUserShrdInfoPtr As LongPtr
+        SystemReserved(0) As Long
+        AtlThunkSListPtr32 As Long
+        ApiSetMap As LongPtr
+        TlsExpansionCounter As Long
+        TlsBitmap As LongPtr
+        TlsBitmapBits(1) As Long
+        ReadOnlySharedMemoryBase As LongPtr
+        SharedData As LongPtr
+        ReadOnlyStaticServerData As LongPtr
+        AnsiCodePageData As LongPtr
+        OemCodePageData As LongPtr
+        UnicodeCaseTableData As LongPtr
+        NumberOfProcessors As Long
+        NtGlobalFlag As Long
+        CriticalSectionTimeout As LARGE_INTEGER
+        HeapSegmentReserve As LongPtr
+        HeapSegmentCommit As LongPtr
+        HeapDeCommitTotalFreeThreshold As LongPtr
+        HeapDeCommitFreeBlockThreshold As LongPtr
+        NumberOfHeaps As Long
+        MaximumNumberOfHeaps As Long
+        ProcessHeaps As LongPtr
+        GdiSharedHandleTable As LongPtr
+        ProcessStarterHelper As LongPtr
+        GdiDCAttributeList As Long
+        LoaderLock As LongPtr
+        OSMajorVersion As Long
+        OSMinorVersion As Long
+        OSBuildNumber As Integer
+        OSCSDVersion As Integer
+        OSPlatformId As Long
+        ImageSubsystem As Long
+        ImageSubsystemMajorVersion As Long
+        ImageSubsystemMinorVersion As Long
+        ActiveProcessAffinityMask As LongPtr
+        #If Win64 Then
+        GdiHandleBuffer(59) As Long
+        #Else
+        GdiHandleBuffer(33) As Long
+        #End If
+        PostProcessInitRoutine As LongPtr
+        TlsExpansionBitmap As LongPtr
+        TlsExpansionBitmapBits(31) As Long
+        SessionId As Long
+        AppCompatFlags As ULARGE_INTEGER
+        AppCompatFlagUser As ULARGE_INTEGER
+        pShimData As LongPtr
+        AppCompatInfo As LongPtr
+        CSDVersion As UNICODE_STRING
+        ActivationContextData As LongPtr
+        ProcessAssemblyStorageMap As LongPtr
+        SystemDefaultActivationContextData As LongPtr
+        SystemAssemblyStorageMap As LongPtr
+        MinimumStackCommit As LongPtr
+        FlsCallback As LongPtr
+        FlsListHead As LIST_ENTRY
+        FlsBitmap As LongPtr
+        FlsBitmapBits(3) As Long
+        FlsHighIndex As Long
+        WerRegistrationData As LongPtr
+        WerShipAssertPtr As LongPtr
+        EcCodeBitMap As LongPtr
+        pImageHeaderHash As LongPtr
+        TracingFlagsOrTraceEnabledBits As Long
+        CsrServerReadOnlySharedMemoryBase As LongLong
+        TppWorkerpListLock As LongPtr
+        TppWorkerpList As LIST_ENTRY
+        WaitOnAddressHashTable(0 To 127) As LongPtr
+        TelemetryCoverageHeader As LongPtr
+        CloudFileFlags As Long
+        CloudFileDiagFlags As Long
+        PlaceholderCompatibilityMode As Byte
+        PlaceholderCompatibilityModeReserved(0 To 6) As Byte
+        LeapSecondData As LongPtr
+        LeapSecondFlagsOrSixtySecondEnabled As Long
+        NtGlobalFlag2 As Long
+        ExtendedFeatureDisableMask As Long
+    End Type
+    #End Region
+    
+    
+    Public Enum TOKEN_INFORMATION_CLASS
+        TokenUser = 1
+        TokenGroups = 2
+        TokenPrivileges = 3
+        TokenOwner = 4
+        TokenPrimaryGroup = 5
+        TokenDefaultDacl = 6
+        TokenSource = 7
+        TokenType = 8
+        TokenImpersonationLevel = 9
+        TokenStatistics = 10
+        TokenRestrictedSids = 11
+        TokenSessionId = 12
+        TokenGroupsAndPrivileges = 13
+        TokenSessionReference = 14
+        TokenSandBoxInert = 15
+        TokenAuditPolicy = 16
+        TokenOrigin = 17
+        TokenElevationType = 18
+        TokenLinkedToken = 19
+        TokenElevation = 20
+        TokenHasRestrictions = 21
+        TokenAccessInformation = 22
+        TokenVirtualizationAllowed = 23
+        TokenVirtualizationEnabled = 24
+        TokenIntegrityLevel = 25
+        TokenUIAccess = 26
+        TokenMandatoryPolicy = 27
+        TokenLogonSid = 28
+        TokenIsAppContainer = 29
+        TokenCapabilities = 30
+        TokenAppContainerSid = 31
+        TokenAppContainerNumber = 32
+        TokenUserClaimAttributes = 33
+        TokenDeviceClaimAttributes = 34
+        TokenRestrictedUserClaimAttributes = 35
+        TokenRestrictedDeviceClaimAttributes = 36
+        TokenDeviceGroups = 37
+        TokenRestrictedDeviceGroups = 38
+        TokenSecurityAttributes = 39
+        TokenIsRestricted = 40
+        TokenProcessTrustLevel = 41
+        TokenPrivateNameSpace = 42
+        TokenSingletonAttributes = 43
+        TokenBnoIsolation = 44
+        TokenChildProcessFlags = 45
+        TokenIsLessPrivilegedAppContainer = 46
+        TokenIsSandboxed = 47
+        TokenIsAppSilo = 48
+        MaxTokenInfoClass = 49
+    End Enum
+    Public Enum CheckTokenMembershipExFlags
+        CTMF_INCLUDE_APPCONTAINER = 1
+        CTMF_INCLUDE_LPAC = 2
+    End Enum
+    Public Type TOKEN_USER
+        User As SID_AND_ATTRIBUTES
+    End Type
+
+    Public Type TOKEN_GROUPS
+        GroupCount As Long
+        Groups(0) As SID_AND_ATTRIBUTES
+    End Type
+
+    Public Type TOKEN_OWNER
+        psid As LongPtr
+    End Type
+
+    Public Type TOKEN_PRIMARY_GROUP
+        psid As LongPtr
+    End Type
+
+    Public Type TOKEN_DEFAULT_DACL
+        DefaultDacl As LongPtr
+    End Type
+
+    Public Const TOKEN_SOURCE_LENGTH = 8
+    Public Type TOKEN_SOURCE
+        SourceName(0 To (TOKEN_SOURCE_LENGTH - 1)) As Byte
+        SourceIdentifier As LUID
+    End Type
+
+    Public Type TOKEN_CONTROL
+        TokenId As LUID
+        AuthenticationId As LUID
+        ModifiedId As LUID
+        TokenSource As TOKEN_SOURCE
+    End Type
+
+    Public Type TOKEN_STATISTICS
+        TokenId As LUID
+        AuthenticationId As LUID
+        ExpirationTime As LARGE_INTEGER
+        TokenType As TOKEN_TYPE
+        ImpersonationLevel As SECURITY_IMPERSONATION_LEVEL
+        DynamicCharged As Long
+        DynamicAvailable As Long
+        GroupCount As Long
+        PrivilegeCount As Long
+        ModifiedId As LUID
+    End Type
+
+    Public Type TOKEN_GROUPS_AND_PRIVILEGES
+        SidCount As Long
+        SidLength As Long
+        Sids As LongPtr
+        RestrictedSidCount As Long
+        RestrictedSidLength As Long
+        RestrictedSids As LongPtr
+        PrivilegeCount As Long
+        PrivilegeLength As Long
+        Privileges As LongPtr
+        AuthenticationId As LUID
+    End Type
+
+    Public Type TOKEN_ORIGIN
+        OriginatingLogonSession As LUID
+    End Type
+
+    Public Enum TOKEN_ELEVATION_TYPE
+        TokenElevationTypeDefault = 1
+        TokenElevationTypeFull = 2
+        TokenElevationTypeLimited = 3
+    End Enum
+
+    Public Type TOKEN_ELEVATION
+        TokenIsElevated As Long
+    End Type
+
+    Public Enum TOKEN_MANDATORY_POLICY_FLAGS
+        TOKEN_MANDATORY_POLICY_OFF = &H0
+        TOKEN_MANDATORY_POLICY_NO_WRITE_UP = &H1
+        TOKEN_MANDATORY_POLICY_NEW_PROCESS_MIN = &H2
+        TOKEN_MANDATORY_POLICY_VALID_MASK = (TOKEN_MANDATORY_POLICY_NO_WRITE_UP Or TOKEN_MANDATORY_POLICY_NEW_PROCESS_MIN)
+    End Enum
+    Public Type TOKEN_MANDATORY_POLICY
+        Policy As TOKEN_MANDATORY_POLICY_FLAGS
+    End Type
+
+    Public Type TOKEN_ACCESS_INFORMATION
+        SidHash As LongPtr
+        RestrictedSidHash As LongPtr
+        Privileges As LongPtr
+        AuthenticationId As LUID
+        TokenType As TOKEN_TYPE
+        ImpersonationLevel As SECURITY_IMPERSONATION_LEVEL
+        MandatoryPolicy As TOKEN_MANDATORY_POLICY
+        Flags As Long
+        AppContainerNumber As Long
+        PackageSid As LongPtr
+        CapabilitiesHash As LongPtr
+        TrustLevelSid As LongPtr
+        SecurityAttributes As LongPtr
+    End Type
+
+    Public Enum MANDATORY_LEVEL
+        MandatoryLevelUntrusted = 0
+        MandatoryLevelLow
+        MandatoryLevelMedium
+        MandatoryLevelHigh
+        MandatoryLevelSystem
+        MandatoryLevelSecureProcess
+        MandatoryLevelCount
+    End Enum
+    Public Type TOKEN_MANDATORY_LABEL
+        Label As SID_AND_ATTRIBUTES
+    End Type
+
+    Public Type TOKEN_APPCONTAINER_INFORMATION
+        TokenAppContainer As LongPtr
+    End Type
+
+    Public Type TOKEN_LINKED_TOKEN
+        LinkedToken As LongPtr
+    End Type
+
+    [ Description ("**WARNING** WINDOWS 8 AND EARLIER MUST USE 56 instead!") ]
+    Public Const POLICY_AUDIT_SUBCATEGORY_COUNT_Vista = 53
+    Public Const POLICY_AUDIT_SUBCATEGORY_COUNT_Win8 = 56
+    [ Description ("**WARNING** WINDOWS 10+ ONLY. WINDOWS 8 AND EARLIER MUST USE _Win8 or _Vista variants.!") ]
+    Public Const POLICY_AUDIT_SUBCATEGORY_COUNT = 59 'Windows 10
+    [ Description ("**WARNING** WINDOWS 10+ ONLY. WINDOWS 8 AND EARLIER MUST USE _Win8 or _Vista variants.!") ]
+    Public Type TOKEN_AUDIT_POLICY
+        PerUserPolicy(POLICY_AUDIT_SUBCATEGORY_COUNT >> 1) As Byte
+    End Type
+    [ Description ("WINVISTA/7") ]
+    Public Type TOKEN_AUDIT_POLICY_Vista
+        PerUserPolicy(POLICY_AUDIT_SUBCATEGORY_COUNT_Vista >> 1) As Byte
+    End Type
+    [ Description ("WIN8 AND EARLIER") ]
+    Public Type TOKEN_AUDIT_POLICY_Win8
+        PerUserPolicy(POLICY_AUDIT_SUBCATEGORY_COUNT_win8 >> 1) As Byte
+    End Type
+    Public Type TOKEN_DEVICE_CLAIMS
+        DeviceClaims As LongPtr
+    End Type
+    Public Type TOKEN_USER_CLAIMS
+        UserClaims As LongPtr
+    End Type
+    
+    
+    
+    Public Declare PtrSafe Function ZwQuerySystemInformation Lib "ntoskrnl.exe" (ByVal SystemInformationClass As SYSTEM_INFORMATION_CLASS, SystemInformation As Any, ByVal SystemInformationLength As Long, ReturnLength As Long) As Long
+    Public Declare PtrSafe Function ZwQueryObject Lib "ntoskrnl.exe" (ByVal Handle As LongPtr, ByVal ObjectInformationClass As OBJECT_INFORMATION_CLASS, ObjectInformation As Any, ByVal ObjectInformationLength As Long, ReturnLength As Long) As Long
+    Public Declare PtrSafe Function ZwQueryVolumeInformationFile Lib "ntoskrnl.exe" (ByVal FileHandle As LongPtr, IoStatusBlock As IO_STATUS_BLOCK, FsInformation As Any, ByVal Length As Long, ByVal FsInformationClass As FS_INFORMATION_CLASS) As Long
+    Public Declare PtrSafe Function ZwSetVolumeInformationFile Lib "ntoskrnl.exe" (ByVal FileHandle As LongPtr, IoStatusBlock As IO_STATUS_BLOCK, FsInformation As Any, ByVal Length As Long, ByVal FsInformationClass As FS_INFORMATION_CLASS) As Long
+    Public Declare PtrSafe Function ZwQueryInformationFile Lib "ntoskrnl.exe" (ByVal FileHandle As LongPtr, IoStatusBlock As IO_STATUS_BLOCK, lpFileInformation As Any, ByVal Length As Long, ByVal FileInformationClass As FILE_INFORMATION_CLASS) As Long
+    Public Declare PtrSafe Function ZwQueryInformationProcess Lib "ntoskrnl.exe" (ByVal ProcessHandle As LongPtr, ByVal ProcessInformationClass As PROCESSINFOCLASS, ProccessInformation As Any, ByVal ProcessInformationLength As Long, ReturnLength As Long) As Long
+    Public Declare PtrSafe Function ZwQueryInformationToken Lib "ntoskrnl.exe" (ByVal TokenHandle As LongPtr, ByVal TokenInformationClass As TOKEN_INFORMATION_CLASS, TokenInformation As Any, ByVal TokenInformationLength As Long, ReturnLength As Long) As Long
+    
+End Module
