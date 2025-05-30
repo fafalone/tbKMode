@@ -1,5 +1,5 @@
 Module modFltMgr
-'UPDATED 11/15/2023 MOST RECENT
+'UPDATED 22 Mar 2025 MOST RECENT
 
 Public Type FLT_OPERATION_REGISTRATION
     MajorFunction As Byte
@@ -48,7 +48,7 @@ End Enum
 #Else
     Public Const FLT_REGISTRATION_VERSION = FLT_REGISTRATION_VERSION_0202
 #End If
-Public Type _FLT_REGISTRATION
+Public Type FLT_REGISTRATION
     Size As Integer
     Version As Integer
     Flags As FLT_REGISTRATION_FLAGS
@@ -76,7 +76,26 @@ Public Enum FLT_FILTER_UNLOAD_FLAGS
     FLTFL_FILTER_UNLOAD_MANDATORY = &H00000001
 End Enum
 
-Public Type _FLT_RELATED_OBJECTS
+Public Enum FLT_CONTEXT_TYPE
+    FLT_VOLUME_CONTEXT = &H0001
+    FLT_INSTANCE_CONTEXT = &H0002
+    FLT_FILE_CONTEXT = &H0004
+    FLT_STREAM_CONTEXT = &H0008
+    FLT_STREAMHANDLE_CONTEXT = &H0010
+    FLT_TRANSACTION_CONTEXT = &H0020
+    #If FLT_MGR_WIN8 Then
+    FLT_SECTION_CONTEXT = &H0040
+    #End If
+    FLT_CONTEXT_END = &Hffff&
+'   Definition for ALL contexts
+ #If FLT_MGR_WIN8 Then
+    FLT_ALL_CONTEXTS = (FLT_VOLUME_CONTEXT Or FLT_INSTANCE_CONTEXT Or FLT_FILE_CONTEXT Or FLT_STREAM_CONTEXT Or FLT_STREAMHANDLE_CONTEXT Or FLT_TRANSACTION_CONTEXT Or FLT_SECTION_CONTEXT)
+ #Else
+    FLT_ALL_CONTEXTS = (FLT_VOLUME_CONTEXT Or FLT_INSTANCE_CONTEXT Or FLT_FILE_CONTEXT Or FLT_STREAM_CONTEXT Or FLT_STREAMHANDLE_CONTEXT Or FLT_TRANSACTION_CONTEXT)
+ #End If
+End Enum
+
+Public Type FLT_RELATED_OBJECTS
     Size As Integer
     TransactionContext As Integer
     Filter As LongPtr 'PFLT_FILTER
@@ -85,6 +104,126 @@ Public Type _FLT_RELATED_OBJECTS
     FileObject As LongPtr 'PFILE_OBJECT
     Transaction As LongPtr 'PKTRANSACTION
 End Type
+
+Public Type FLT_RELATED_CONTEXTS
+    VolumeContext As LongPtr 'PFLT_CONTEXT
+    InstanceContext As LongPtr 'PFLT_CONTEXT
+    FileContext As LongPtr 'PFLT_CONTEXT
+    StreamContext As LongPtr 'PFLT_CONTEXT
+    StreamHandleContext As LongPtr 'PFLT_CONTEXT
+    TransactionContext As LongPtr 'PFLT_CONTEXT
+End Type
+
+Public Type FLT_RELATED_CONTEXTS_EX
+    VolumeContext As LongPtr 'PFLT_CONTEXT
+    InstanceContext As LongPtr 'PFLT_CONTEXT
+    FileContext As LongPtr 'PFLT_CONTEXT
+    StreamContext As LongPtr 'PFLT_CONTEXT
+    StreamHandleContext As LongPtr 'PFLT_CONTEXT
+    TransactionContext As LongPtr 'PFLT_CONTEXT
+    SectionContext As LongPtr 'PFLT_CONTEXT
+End Type
+
+Public Delegate Sub FLT_CONTEXT_CLEANUP_CALLBACK (ByVal Context As LongPtr, [TypeHint(FLT_CONTEXT_TYPE)] ByVal ContextType As Integer)
+
+Public Delegate Sub FLT_CONTEXT_ALLOCATE_CALLBACK (ByVal PoolType As POOL_TYPE, ByVal Size As LongPtr, [TypeHint(FLT_CONTEXT_TYPE)] ByVal ContextType As Integer)
+Public Delegate Sub FLT_CONTEXT_FREE_CALLBACK (ByVal Pool As LongPtr, [TypeHint(FLT_CONTEXT_TYPE)] ByVal ContextType As Integer)
+
+Public Enum FLT_CONTEXT_REGISTRATION_FLAGS
+    FLTFL_CONTEXT_REGISTRATION_NO_EXACT_SIZE_MATCH = &H0001
+End Enum
+
+Public Const FLT_VARIABLE_SIZED_CONTEXTS As LongPtr = (-1)
+
+Public Type FLT_CONTEXT_REGISTRATION
+    '  Identifies the type of this context
+    /* [TypeHint(FLT_CONTEXT_TYPE)] */ ContextType As Integer 'FLT_CONTEXT_TYPE
+    '  Local flags
+    /* [TypeHint(FLT_CONTEXT_REGISTRATION_FLAGS)] */ Flags As Integer 'FLT_CONTEXT_REGISTRATION_FLAGS
+    '  Routine to call to cleanup the context before it is deleted.
+    '  This may be NULL if not cleanup is needed.
+    ContextCleanupCallback As FLT_CONTEXT_CLEANUP_CALLBACK
+    '  Defines the size & pool tag the mini-filter wants for the given context.
+    '  FLT_VARIABLE_SIZED_CONTEXTS may be specified for the size if variable
+    '  sized contexts are used.  A size of zero is valid.  If an empty pooltag
+    '  value is specified, the FLTMGR will use a context type specific tag.
+    '  If an explicit size is specified, the FLTMGR internally optimizes the
+    '  allocation of that entry.
+    '  NOTE:  These fields are ignored if Allocate & Free routines are
+    '         specifed.
+    Size As LongPtr
+    PoolTag As Long
+    '  Specifies the ALLOCATE and FREE routines that should be used
+    '  when allocating a context for this mini-filter.
+    '  NOTE: The above size & PoolTag fields are ignored when these routines
+    '        are defined.
+    ContextAllocateCallback As FLT_CONTEXT_ALLOCATE_CALLBACK
+    ContextFreeCallback As FLT_CONTEXT_FREE_CALLBACK
+    '  Reserved for future expansion
+    Reserved1 As LongPtr
+End Type
+
+Public Enum FLT_INSTANCE_SETUP_FLAGS
+    ' //  If set, this is an automatic instance attachment notification.  These
+    ' //  occur when the filter is first loaded for all existing volumes, and
+    ' //  when a new volume is mounted.
+    FLTFL_INSTANCE_SETUP_AUTOMATIC_ATTACHMENT = &H00000001
+'   If set, this is a manual instance attachment request via FilterAttach
+'   (user mode) or FltAttachVolume.
+    FLTFL_INSTANCE_SETUP_MANUAL_ATTACHMENT = &H00000002
+'   If set, this is an automatic instance notification for a volume that
+'   has just been mounted in the system.
+    FLTFL_INSTANCE_SETUP_NEWLY_MOUNTED_VOLUME = &H00000004
+'   If set, this volume is not currently attached to a storage stack.
+'   This usually means the volume is dismounted but it does not always
+'   mean that.  There are scnearios with certain file systems (fat & cdfs
+'   being some) where a volume can become reattached after it has detached.
+'   This flag is only set in Longhorn or later.
+    FLTFL_INSTANCE_SETUP_DETACHED_VOLUME = &H00000008
+End Enum
+
+Public Enum FLT_FILESYSTEM_TYPE
+    FLT_FSTYPE_UNKNOWN = 0 'an UNKNOWN file system type
+    FLT_FSTYPE_RAW = 1 'Microsoft's RAW file system       (\FileSystem\RAW)
+    FLT_FSTYPE_NTFS = 2 'Microsoft's NTFS file system      (\FileSystem\Ntfs)
+    FLT_FSTYPE_FAT = 3 'Microsoft's FAT file system       (\FileSystem\Fastfat)
+    FLT_FSTYPE_CDFS = 4 'Microsoft's CDFS file system      (\FileSystem\Cdfs)
+    FLT_FSTYPE_UDFS = 5 'Microsoft's UDFS file system      (\FileSystem\Udfs)
+    FLT_FSTYPE_LANMAN = 6 'Microsoft's LanMan Redirector     (\FileSystem\MRxSmb)
+    FLT_FSTYPE_WEBDAV = 7 'Microsoft's WebDav redirector     (\FileSystem\MRxDav)
+    FLT_FSTYPE_RDPDR = 8 'Microsoft's Terminal Server redirector    (\Driver\rdpdr)
+    FLT_FSTYPE_NFS = 9 'Microsoft's NFS file system       (\FileSystem\NfsRdr)
+    FLT_FSTYPE_MS_NETWARE = 10 'Microsoft's NetWare redirector    (\FileSystem\nwrdr)
+    FLT_FSTYPE_NETWARE = 11 'Novell's NetWare redirector
+    FLT_FSTYPE_BSUDF = 12 'The BsUDF CD-ROM driver           (\FileSystem\BsUDF)
+    FLT_FSTYPE_MUP = 13 'Microsoft's Mup redirector        (\FileSystem\Mup)
+    FLT_FSTYPE_RSFX = 14 'Microsoft's WinFS redirector      (\FileSystem\RsFxDrv)
+    FLT_FSTYPE_ROXIO_UDF1 = 15 'Roxio's UDF writeable file system (\FileSystem\cdudf_xp)
+    FLT_FSTYPE_ROXIO_UDF2 = 16 'Roxio's UDF readable file system  (\FileSystem\UdfReadr_xp)
+    FLT_FSTYPE_ROXIO_UDF3 = 17 'Roxio's DVD file system           (\FileSystem\DVDVRRdr_xp)
+    FLT_FSTYPE_TACIT = 18 'Tacit FileSystem                  (\Device\TCFSPSE)
+    FLT_FSTYPE_FS_REC = 19 'Microsoft's File system recognizer (\FileSystem\Fs_rec)
+    FLT_FSTYPE_INCD = 20 'Nero's InCD file system           (\FileSystem\InCDfs)
+    FLT_FSTYPE_INCD_FAT = 21 'Nero's InCD FAT file system       (\FileSystem\InCDFat)
+    FLT_FSTYPE_EXFAT = 22 'Microsoft's EXFat FILE SYSTEM     (\FileSystem\exfat)
+    FLT_FSTYPE_PSFS = 23 'PolyServ's file system            (\FileSystem\psfs)
+    FLT_FSTYPE_GPFS = 24 'IBM General Parallel File System  (\FileSystem\gpfs)
+    FLT_FSTYPE_NPFS = 25 'Microsoft's Named Pipe file system(\FileSystem\npfs)
+    FLT_FSTYPE_MSFS = 26 'Microsoft's Mailslot file system  (\FileSystem\msfs)
+    FLT_FSTYPE_CSVFS = 27 'Microsoft's Cluster Shared Volume file system  (\FileSystem\csvfs)
+    FLT_FSTYPE_REFS = 28 'Microsoft's ReFS file system      (\FileSystem\Refs or \FileSystem\Refsv1)
+    FLT_FSTYPE_OPENAFS = 29 'OpenAFS file system               (\Device\AFSRedirector)
+    FLT_FSTYPE_CIMFS = 30 'Composite Image file system       (\FileSystem\cimfs)
+End Enum
+
+Public Enum FLT_INSTANCE_QUERY_TEARDOWN_FLAGS
+    [_] 'No flags defined
+End Enum
+
+
+
+
+Public Const IRP_MJ_OPERATION_END As Byte = &H80
 
 Public Const IRP_MJ_ACQUIRE_FOR_SECTION_SYNCHRONIZATION As Byte = &HFF
 Public Const IRP_MJ_RELEASE_FOR_SECTION_SYNCHRONIZATION As Byte = &HFE
@@ -149,7 +288,7 @@ Public Type FLT_FILE_NAME_INFORMATION
     '  For each bit that is set in the NamesParsed flags field, the
     '  corresponding substring from Name has been appropriately
     '  parsed into one of the unicode strings below.
-    NamesParsed As FLT_FILE_NAME_PARSED_FLAGS
+    NamesParsed As Integer 'FLT_FILE_NAME_PARSED_FLAGS
     '  The name format that this FLT_FILE_NAME_INFORMATION structure
     '  represents.
     Format As FLT_FILE_NAME_OPTIONS
@@ -249,12 +388,140 @@ Public Type FLT_IO_PARAMETER_BLOCK
     TargetInstance As LongPtr 'PFLT_INSTANCE
     '  Normalized parameters for the operation
     'Parameters As FLT_PARAMETERS
-    'This needs to be expanded or at least verified:
+    [Description("The following options for the Parameters union are currently defined:" & vbCrLf & _
+                    "FLT_PARAMETERS_Create (IRP_MJ_CREATE)" & _
+                    "FLT_PARAMETERS_Read (IRP_MJ_READ)" & _
+                    "FLT_PARAMETERS_Write (IRP_MJ_WRITE)" & _
+                    "FLT_PARAMETERS_SetFileInformation (IRP_MJ_SET_INFORMATION)" & _
+                    "FLT_PARAMETERS_SetVolumeInformation (IRP_MJ_SET_VOLUME_INFORMATION)" & _
+                    "FLT_PARAMETERS_DeviceIoControl_Buffered (IRP_MJ_DEVICE_CONTROL or IRP_MJ_INTERNAL_DEVICE_CONTROL, with METHOD_BUFFERED.)" & _
+                    "FLT_PARAMETERS_Others - A generic version for custom queries.")]
+    
     #If Win64 Then
         Parameters(47) As Byte
     #Else
         Parameters(27) As Byte
     #End If
+End Type
+
+#If Win64 = 0 Then
+[PackingAlignment(4)]
+#End If
+Public Type FLT_PARAMETERS_Create
+        SecurityContext As LongPtr 'PIO_SECURITY_CONTEXT
+        '  The low 24 bits contains CreateOptions flag values.
+        '  The high 8 bits contains the CreateDisposition values.
+        Options As FileAccessFlags
+        #If Win64 Then
+        POINTER_ALIGNMENT(3) As Byte
+        #End If
+        FileAttributes As Integer 'POINTER_ALIGNMENT
+        ShareAccess As Integer
+        #If Win64 Then
+        POINTER_ALIGNMENT2(3) As Byte
+        #End If
+        EaLength As Long 'POINTER_ALIGNMENT
+        EaBuffer As LongPtr 'Not in IO_STACK_LOCATION parameters list
+        AllocationSize As LARGE_INTEGER 'Not in IO_STACK_LOCATION parameters list
+End Type
+#If Win64 = 0 Then
+[PackingAlignment(4)]
+#End If
+Public Type FLT_PARAMETERS_Read
+    Length As Long
+    #If Win64 Then
+    POINTER_ALIGNMENT(3) As Byte
+    #End If
+    Key As Long
+    ByteOffset As LARGE_INTEGER
+    ReadBuffer As LongPtr
+    MdlAddress As LongPtr 'PMDL
+End Type
+#If Win64 = 0 Then
+[PackingAlignment(4)]
+#End If
+Public Type FLT_PARAMETERS_Write
+    Length As Long
+    #If Win64 Then
+    POINTER_ALIGNMENT(3) As Byte
+    #End If
+    Key As Long
+    ByteOffset As LARGE_INTEGER
+    WriteBuffer As LongPtr
+    MdlAddress As LongPtr 'PMDL
+End Type
+#If Win64 = 0 Then
+[PackingAlignment(4)]
+#End If
+Public Type FLT_PARAMETERS_SetFileInformation
+    Length As Long
+    #If Win64 Then
+    POINTER_ALIGNMENT(3) As Byte
+    #End If
+    FileInformationClass As FILE_INFORMATION_CLASS
+    ParentOfTarget As LongPtr 'PFILE_OBJECT
+    ' union {
+        ' struct {
+            ' BOOLEAN ReplaceIfExists;
+            ' BOOLEAN AdvanceOnly;
+        ' };
+        ' ULONG ClusterCount;
+        ' HANDLE DeleteHandle;
+    ' };
+    union As LongPtr
+    InfoBuffer As LongPtr
+End Type
+#If Win64 = 0 Then
+[PackingAlignment(4)]
+#End If
+Public Type FLT_PARAMETERS_SetVolumeInformation
+    Length As Long
+    #If Win64 Then
+    POINTER_ALIGNMENT(3) As Byte
+    #End If
+    FsInformationClass As FS_INFORMATION_CLASS
+    VolumeBuffer As LongPtr
+End Type
+
+#If Win64 = 0 Then
+[PackingAlignment(4)]
+#End If
+Public Type FLT_PARAMETERS_DeviceIoControl_Buffered
+    OutputBufferLength As Long
+    #If Win64 Then
+    POINTER_ALIGNMENT(3) As Byte
+    #End If
+    InputBufferLength As Long
+    #If Win64 Then
+    POINTER_ALIGNMENT2(3) As Byte
+    #End If
+    IoControlCode As Long
+    SystemBuffer As LongPtr
+End Type
+#If Win64 = 0 Then
+[PackingAlignment(4)]
+#End If
+Public Type FLT_PARAMETERS_FsControl_Common
+    OutputBufferLength As Long
+    #If Win64 Then
+    POINTER_ALIGNMENT(3) As Byte
+    #End If
+    InputBufferLength As Long
+    #If Win64 Then
+    POINTER_ALIGNMENT2(3) As Byte
+    #End If
+    FsControlCode As Long
+End Type
+#If Win64 = 0 Then
+[PackingAlignment(4)]
+#End If
+Public Type FLT_PARAMETERS_Others
+    Argument1 As LongPtr
+    Argument2 As LongPtr
+    Argument3 As LongPtr
+    Argument4 As LongPtr
+    Argument5 As LongPtr
+    Argument6 As LARGE_INTEGER
 End Type
 
 Public Type FLT_CALLBACK_DATA
@@ -268,9 +535,167 @@ Public Type FLT_CALLBACK_DATA
 End Type
 
 
-Public Declare PtrSafe Function FltRegisterFilter Lib "fltmgr.sys" (Driver As DRIVER_OBJECT, Registration As _FLT_REGISTRATION, RetFilter As LongPtr) As Long
-Public Declare PtrSafe Function FltUnregisterFilter Lib "fltmgr.sys" (ByVal Filter As LongPtr) As Long
-Public Declare PtrSafe Function FltStartFiltering Lib "fltmgr.sys" (ByVal Filter As LongPtr) As Long
-Public Declare PtrSafe Function FltGetFileNameInformation Lib "fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA, NameOptions As FLT_FILE_NAME_OPTIONS, FileNameInformation As FLT_FILE_NAME_INFORMATION) As NTSTATUS
+Public Enum FLT_POST_OPERATION_FLAGS
+    FLTFL_POST_OPERATION_DRAINING = &H1
+End Enum
+
+
+Public Enum FLT_SET_CONTEXT_OPERATION
+    ' 
+    '   If a context already exists, replace with the given context.
+    '   Return the old context.
+    ' 
+    FLT_SET_CONTEXT_REPLACE_IF_EXISTS
+    ' 
+    '   If a context already exists, keep the old context and return an
+    '   error status.  Return the old context (yes, we really do want to
+    '   return the old context, the caller already has the new context).
+    '   The context returned must later be released.
+    ' 
+    FLT_SET_CONTEXT_KEEP_IF_EXISTS
+End Enum
+
+Public Enum FLT_IO_OPERATION_FLAGS
+    ' //
+    ' //  If set, the given read/write request will be non-cached.
+    ' //
+    FLTFL_IO_OPERATION_NON_CACHED = &H00000001
+'   If set, the given read/write request will have the
+'   IRP_PAGING_IO flag set
+    FLTFL_IO_OPERATION_PAGING = &H00000002
+'   If set, the given read/write request will not update the
+'   file object's current byte offset.
+    FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET = &H00000004
+' #if FLT_MGR_LONGHORN
+'   If set, the given read/write request will have the
+'   IRP_SYNCHRONOUS_PAGING_IO flag set
+    FLTFL_IO_OPERATION_SYNCHRONOUS_PAGING = &H00000008
+End Enum
+
+Public Enum FltVolumePropertyFlags
+    VOL_PROP_FL_DAX_VOLUME = &H0001
+End Enum
+Public Type FLT_VOLUME_PROPERTIES
+    '  The possible DeviceTypes are defined in NTIFS.H and begin with
+    '  FILE_DEVICE_
+    DeviceType As DEVICE_TYPE
+    '  The possible DeviceCharacteristics flags are defined in NTIFS.H.
+    '  Potential values are:
+    '      FILE_REMOVABLE_MEDIA
+    '      FILE_READ_ONLY_DEVICE
+    '      FILE_FLOPPY_DISKETTE
+    '      FILE_WRITE_ONCE_MEDIA
+    '      FILE_REMOTE_DEVICE
+    '      FILE_DEVICE_IS_MOUNTED
+    '      FILE_VIRTUAL_VOLUME
+    '      FILE_AUTOGENERATED_DEVICE_NAME
+    '      FILE_DEVICE_SECURE_OPEN
+    DeviceCharacteristics As FILE_DEVICE_CHARACTERISTICS
+    '  The possible DeviceObjectFlags are define in NTIFS.H.  All potential
+    '  values begin with DO_.
+    DeviceObjectFlags As DEVICE_OBJECT_FLAGS
+    AlignmentRequirement As Long
+    SectorSize As Integer
+    Flags As Integer
+    '  The name of the file system driver associated with this device.
+    '  The buffer for this unicode string is contiguous with this structure and
+    '  does not need to be initialized before calling FltGetVolumeProperties.
+    FileSystemDriverName As UNICODE_STRING
+    '  The name of the file system device associated with this device.
+    '  The buffer for this unicode string is contiguous with this structure and
+    '  does not need to be initialized before calling FltGetVolumeProperties.
+    FileSystemDeviceName As UNICODE_STRING
+    '  The name of the real device object associated with this device.  This
+    '  is empty for network file systems.
+    '  The buffer for this unicode string is contiguous with this structure and
+    '  does not need to be initialized before calling FltGetVolumeProperties.
+    RealDeviceName As UNICODE_STRING
+End Type
+
+Public Enum FltPortAccessRights
+    FLT_PORT_CONNECT = &H0001
+    FLT_PORT_ALL_ACCESS = (FLT_PORT_CONNECT Or STANDARD_RIGHTS_ALL)
+End Enum
+
+
+Public Declare PtrSafe Function FltRegisterFilter Lib "Fltmgr.sys" (Driver As DRIVER_OBJECT, Registration As FLT_REGISTRATION, RetFilter As LongPtr) As NTSTATUS
+Public Declare PtrSafe Sub FltUnregisterFilter Lib "Fltmgr.sys" (ByVal Filter As LongPtr)
+Public Declare PtrSafe Function FltStartFiltering Lib "Fltmgr.sys" (ByVal Filter As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetRoutineAddress Lib "Fltmgr.sys" (ByVal FltMgrRoutineName As LongPtr) As LongPtr
+Public Declare PtrSafe Sub FltFreeCallbackData Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA)
+Public Declare PtrSafe Function FltGetIrpName Lib "Fltmgr.sys" (ByVal IrpMajorCode As Byte) As LongPtr
+
+Public Declare PtrSafe Function FltObjectReference Lib "Fltmgr.sys" (FltObject As Any) As NTSTATUS
+Public Declare PtrSafe Sub FltObjectDereference Lib "Fltmgr.sys" (FltObject As Any)
+
+Public Delegate Function FLT_MESSAGE_NOTIFY (ByVal PortCookie As LongPtr, ByVal InputBuffer As LongPtr, ByVal InputBufferLength As Long, ByVal OutputBuffer As LongPtr, ByVal OutputBufferLength As Long, ReturnOutputBufferLength As Long) As NTSTATUS
+Public Delegate Function FLT_CONNECT_NOTIFY (ByVal ClientPort As LongPtr, ByVal ServerPortCookie As LongPtr, ByVal ConnectionContext As LongPtr, ByVal SizeOfContext As Long, ConnectionPortCookie As LongPtr) As NTSTATUS
+Public Delegate Sub FLT_DISCONNECT_NOTIFY (ByVal ConnectionCookie As LongPtr)
+Public Declare PtrSafe Function FltCreateCommunicationPort Lib "Fltmgr.sys" (ByVal Filter As LongPtr, ServerPort As LongPtr, ObjectAttributes As OBJECT_ATTRIBUTES, ByVal ServerPortCookie As LongPtr, ByVal ConnectNotifyCallback As FLT_CONNECT_NOTIFY, ByVal DisconnectNotifyCallback As FLT_DISCONNECT_NOTIFY, ByVal MessageNotifyCallback As FLT_MESSAGE_NOTIFY, ByVal MaxConnections As Long) As NTSTATUS
+Public Declare PtrSafe Sub FltCloseCommunicationPort Lib "Fltmgr.sys" (ByVal ServerPort As LongPtr)
+Public Declare PtrSafe Sub FltCloseClientPort Lib "Fltmgr.sys" (ByVal Filter As LongPtr, ClientPort As LongPtr)
+Public Declare PtrSafe Function FltSendMessage Lib "Fltmgr.sys" (ByVal Filter As LongPtr, ClientPort As LongPtr, SenderBuffer As Any, ByVal SenderBufferLength As Long, ReplyBuffer As Any, ReplyLength As Long, Timeout As LARGE_INTEGER) As NTSTATUS
+Public Declare PtrSafe Function FltBuildDefaultSecurityDescriptor Lib "Fltmgr.sys" (SecurityDescriptor As LongPtr, ByVal DesiredAccess As Long) As NTSTATUS
+Public Declare PtrSafe Sub FltFreeSecurityDescriptor Lib "Fltmgr.sys" (ByVal SecurityDescriptor As LongPtr)
+
+Public Declare PtrSafe Sub FltReferenceContext Lib "Fltmgr.sys" (ByVal context As LongPtr)
+Public Declare PtrSafe Sub FltReleaseContext Lib "Fltmgr.sys" (ByVal context As LongPtr)
+Public Declare PtrSafe Sub FltDeleteContext Lib "Fltmgr.sys" (ByVal context As LongPtr)
+Public Declare PtrSafe Function FltAllocateContext Lib "Fltmgr.sys" (ByVal Filter As LongPtr, [TypeHint(FLT_CONTEXT_TYPE)] ByVal ContextType As Integer, ByVal ContextSize As LongPtr, ByVal PoolType As POOL_TYPE, ReturnedContext As LongPtr) As NTSTATUS
+Public Declare PtrSafe Sub FltGetContexts Lib "Fltmgr.sys" (FltObjects As FLT_RELATED_OBJECTS, [TypeHint(FLT_CONTEXT_TYPE)] ByVal DesiredContexts As Integer, Contexts As FLT_RELATED_CONTEXTS)
+Public Declare PtrSafe Sub FltReleaseContexts Lib "Fltmgr.sys" (Contexts As FLT_RELATED_CONTEXTS)
+Public Declare PtrSafe Function FltGetFileContext Lib "Fltmgr.sys" (ByVal Instance As LongPtr, FileObject As FILE_OBJECT, Context As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetStreamContext Lib "Fltmgr.sys" (ByVal Instance As LongPtr, FileObject As FILE_OBJECT, Context As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetStreamHandleContext Lib "Fltmgr.sys" (ByVal Instance As LongPtr, FileObject As FILE_OBJECT, Context As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltSetFileContext Lib "Fltmgr.sys" (ByVal Instance As LongPtr, FileObject As FILE_OBJECT, ByVal Operation As FLT_SET_CONTEXT_OPERATION, ByVal NewContext As LongPtr, OldContext As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltSetStreamContext Lib "Fltmgr.sys" (ByVal Instance As LongPtr, FileObject As FILE_OBJECT, ByVal Operation As FLT_SET_CONTEXT_OPERATION, ByVal NewContext As LongPtr, OldContext As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltSetStreamHandleContext Lib "Fltmgr.sys" (ByVal Instance As LongPtr, FileObject As FILE_OBJECT, ByVal Operation As FLT_SET_CONTEXT_OPERATION, ByVal NewContext As LongPtr, OldContext As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltAllocatePoolAlignedWithTag Lib "Fltmgr.sys" (ByVal Instance As LongPtr, ByVal PoolType As POOL_TYPE, ByVal NumberOfBytes As LongPtr, ByVal Tag As Long) As LongPtr
+Public Declare PtrSafe Sub FltFreePoolAlignedWithTag Lib "Fltmgr.sys" (ByVal Instance As LongPtr, ByVal Buffer As LongPtr, ByVal Tag As Long)
+Public Declare PtrSafe Function FltOpenVolume Lib "Fltmgr.sys" (ByVal Instance As LongPtr, VolumeHandle As LongPtr, VolumeFileObject As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetVolumeProperties Lib "Fltmgr.sys" (ByVal Volume As LongPtr, VolumeProperties As Any, ByVal VolumePropertiesLength As Long, LengthReturned As Long) As NTSTATUS
+Public Declare PtrSafe Function FltGetVolumeFromInstance Lib "Fltmgr.sys" (ByVal Instance As LongPtr, RetVolume As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetFilterFromInstance Lib "Fltmgr.sys" (ByVal Instance As LongPtr, RetFilter As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetVolumeFromFileObject Lib "Fltmgr.sys" (ByVal Filter As LongPtr, FileObject As FILE_OBJECT, RetVolume As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetVolumeFromDeviceObject Lib "Fltmgr.sys" (ByVal Filter As LongPtr, DeviceObject As DEVICE_OBJECT, RetVolume As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltIsFltMgrVolumeDeviceObject Lib "Fltmgr.sys" (DeviceObject As DEVICE_OBJECT) As Byte
+Public Declare PtrSafe Function FltGetDeviceObject Lib "Fltmgr.sys" (ByVal Volume As LongPtr, DeviceObject As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetDiskDeviceObject Lib "Fltmgr.sys" (ByVal Volume As LongPtr, DiskDeviceObject As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetLowerInstance Lib "Fltmgr.sys" (ByVal CurrentInstance As LongPtr, LowerInstance As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGettUpperInstance Lib "Fltmgr.sys" (ByVal CurrentInstance As LongPtr, UpperInstance As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetTopInstance Lib "Fltmgr.sys" (ByVal Volume As LongPtr, Instance As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetBottomInstance Lib "Fltmgr.sys" (ByVal Volume As LongPtr, Instance As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltCompareInstanceAltitudes Lib "Fltmgr.sys" (ByVal Instance1 As LongPtr, ByVal Instance2 As LongPtr) As Long
+Public Declare PtrSafe Function FltGetVolumeName Lib "Fltmgr.sys" (ByVal Volume As LongPtr, VolumeName As UNICODE_STRING, Optional BufferSizeNeeded As Long) As NTSTATUS
+
+
+
+Public Delegate Sub FLT_COMPLETED_ASYNC_IO_CALLBACK (CallbackData As FLT_CALLBACK_DATA, ByVal Context As LongPtr)
+Public Declare PtrSafe Function FltReadFile Lib "Fltmgr.sys" (ByVal InitiatingInstance As LongPtr, FileObject As FILE_OBJECT, ByteOffset As LARGE_INTEGER, ByVal Length As Long, Buffer As Any, ByVal Flags As FLT_IO_OPERATION_FLAGS, BytesRead As Long, Optional ByVal CallbackRoutine As FLT_COMPLETED_ASYNC_IO_CALLBACK, Optional ByVal CallbackContext As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltReadFileEx Lib "Fltmgr.sys" (ByVal InitiatingInstance As LongPtr, FileObject As FILE_OBJECT, ByteOffset As LARGE_INTEGER, ByVal Length As Long, Buffer As Any, ByVal Flags As FLT_IO_OPERATION_FLAGS, BytesRead As Long, Optional ByVal CallbackRoutine As FLT_COMPLETED_ASYNC_IO_CALLBACK, Optional ByVal CallbackContext As LongPtr, Optional Key As Long, Optional ByVal Mdl As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltTagFile Lib "Fltmgr.sys" (ByVal InitiatingInstance As LongPtr, FileObject As FILE_OBJECT, ByVal FileTag As Long, Guid As UUID, DataBuffer As Any, ByVal DataBufferLength As Long) As NTSTATUS
+Public Declare PtrSafe Function FltTagFileEx Lib "Fltmgr.sys" (ByVal InitiatingInstance As LongPtr, FileObject As FILE_OBJECT, ByVal FileTag As Long, Guid As UUID, DataBuffer As Any, ByVal DataBufferLength As Long, ByVal ExistingFileTag As Long, ExistingGuid As UUID, ByVal Flags As ReparseDataExFlags) As NTSTATUS
+Public Declare PtrSafe Function FltUntagFile Lib "Fltmgr.sys" (ByVal InitiatingInstance As LongPtr, FileObject As FILE_OBJECT, ByVal FileTag As Long, Guid As UUID) As NTSTATUS
+Public Declare PtrSafe Function FltWriteFile Lib "Fltmgr.sys" (ByVal InitiatingInstance As LongPtr, FileObject As FILE_OBJECT, ByteOffset As LARGE_INTEGER, ByVal Length As Long, Buffer As Any, ByVal Flags As FLT_IO_OPERATION_FLAGS, BytesWritten As Long, Optional ByVal CallbackRoutine As FLT_COMPLETED_ASYNC_IO_CALLBACK, Optional ByVal CallbackContext As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltWriteFileEx Lib "Fltmgr.sys" (ByVal InitiatingInstance As LongPtr, FileObject As FILE_OBJECT, ByteOffset As LARGE_INTEGER, ByVal Length As Long, Buffer As Any, ByVal Flags As FLT_IO_OPERATION_FLAGS, BytesWritten As Long, Optional ByVal CallbackRoutine As FLT_COMPLETED_ASYNC_IO_CALLBACK, Optional ByVal CallbackContext As LongPtr, Optional Key As Long, Optional ByVal Mdl As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltCreateFile Lib "Fltmgr.sys" (ByVal Filter As LongPtr, ByVal Instance As LongPtr, FileHandle As LongPtr, [TypeHint(FileAccessRights, GenericRights)] ByVal DesiredAccess As Long, ObjectAttributes As OBJECT_ATTRIBUTES, IoStatusBlock As IO_STATUS_BLOCK, AllocationSize As LARGE_INTEGER, ByVal FileAttributes As FILE_ATTRIBUTES, ByVal ShareAccess As FileShareMode, ByVal CreateDisposition As FileCreateDisposition, ByVal CreateOptions As FileAccessFlags, EaBuffer As Any, ByVal EaLength As Long, ByVal Flags As IoCreateFileFlags) As NTSTATUS
+Public Declare PtrSafe Function FltCreateFileEx Lib "Fltmgr.sys" (ByVal Filter As LongPtr, ByVal Instance As LongPtr, FileHandle As LongPtr, FileObject As LongPtr, [TypeHint(FileAccessRights, GenericRights)] ByVal DesiredAccess As Long, ObjectAttributes As OBJECT_ATTRIBUTES, IoStatusBlock As IO_STATUS_BLOCK, AllocationSize As LARGE_INTEGER, ByVal FileAttributes As FILE_ATTRIBUTES, ByVal ShareAccess As FileShareMode, ByVal CreateDisposition As FileCreateDisposition, ByVal CreateOptions As FileAccessFlags, EaBuffer As Any, ByVal EaLength As Long, ByVal Flags As IoCreateFileFlags) As NTSTATUS
+Public Declare PtrSafe Function FltCreateFileEx2 Lib "Fltmgr.sys" (ByVal Filter As LongPtr, ByVal Instance As LongPtr, FileHandle As LongPtr, FileObject As LongPtr, [TypeHint(FileAccessRights, GenericRights)] ByVal DesiredAccess As Long, ObjectAttributes As OBJECT_ATTRIBUTES, IoStatusBlock As IO_STATUS_BLOCK, AllocationSize As LARGE_INTEGER, ByVal FileAttributes As FILE_ATTRIBUTES, ByVal ShareAccess As FileShareMode, ByVal CreateDisposition As FileCreateDisposition, ByVal CreateOptions As FileAccessFlags, EaBuffer As Any, ByVal EaLength As Long, ByVal Flags As IoCreateFileFlags, DriverContext As IO_DRIVER_CREATE_CONTEXT) As NTSTATUS
+Public Declare PtrSafe Function FltClose Lib "Fltmgr.sys" (ByVal FileHandle As LongPtr) As NTSTATUS
+Public Declare PtrSafe Sub FltCancelFileOpen Lib "Fltmgr.sys" (ByVal Instance As LongPtr, FileObject As FILE_OBJECT)
+Public Declare PtrSafe Function FltFlushBuffers Lib "Fltmgr.sys" (ByVal Instance As LongPtr, FileObject As FILE_OBJECT) As NTSTATUS
+Public Declare PtrSafe Function FltQueryInformationFile Lib "Fltmgr.sys" (ByVal Instance As LongPtr, FileObject As FILE_OBJECT, FileInformation As Any, ByVal Length As Long, ByVal FileInformationClass As FILE_INFORMATION_CLASS, Optional LengthReturned As Long) As NTSTATUS
+Public Declare PtrSafe Function FltSetInformationFile Lib "Fltmgr.sys" (ByVal Instance As LongPtr, FileObject As FILE_OBJECT, FileInformation As Any, ByVal Length As Long, ByVal FileInformationClass As FILE_INFORMATION_CLASS) As NTSTATUS
+Public Declare PtrSafe Function FltIsDirectory Lib "Fltmgr.sys" (FileObject As FILE_OBJECT, ByVal Instance As LongPtr, IsDirectory As Byte) As NTSTATUS
+Public Declare PtrSafe Function FltGetFileNameInformation Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA, ByVal NameOptions As FLT_FILE_NAME_OPTIONS, FileNameInformation As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetFileNameInformationUnsafe Lib "Fltmgr.sys" (FileObject As FILE_OBJECT, ByVal Instance As LongPtr, FileNameInformation As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltParseFileNameInformation Lib "Fltmgr.sys" (FileNameInformation As FLT_FILE_NAME_INFORMATION) As NTSTATUS
+Public Declare PtrSafe Sub FltReleaseFileNameInformation Lib "Fltmgr.sys" (FileNameInformation As FLT_FILE_NAME_INFORMATION)
+
+Public Delegate Sub FLT_COMPLETE_CANCELED_CALLBACK (CallbackData As FLT_CALLBACK_DATA)
+Public Declare PtrSafe Function FltCancelIo Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA) As Byte
+Public Declare PtrSafe Function FltSetCancelCompletion Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA) As NTSTATUS
+Public Declare PtrSafe Function FltClearCancelCompletion Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA, ByVal CanceledCallback As FLT_COMPLETE_CANCELED_CALLBACK) As NTSTATUS
+Public Declare PtrSafe Function FltIsIoCanceled Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA) As Byte
 
 End Module
