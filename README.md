@@ -3,6 +3,8 @@ twinBASIC Kernel Mode Support Package
 
 This is a very preliminary effort to supply a package like tbShellLib, but for kernel mode programming in twinBASIC. At this stage, it's extremely preliminary, with only enough coverage to support my public HelloWorldDriver and a few additional projects I'm working on. If you make additions, please help out and submit them to be merged. 
 
+**Updated 30 May 2025 (Version 0.2.4)** - Modest expansion focusing mainly on fltmgr for an upcoming project.
+
 ------------------------------
 
 tbKMode
@@ -18,5 +20,4 @@ At this very early stage, there's very little coverage of a truly massive API su
 can support a few small projects, and will give you ideas about how to adapt the very unfriendly
 kernel mode code, which is very heavy on macros.
 
-**Note** Currently a bug in tB prevents minifilter drivers from working at all. I strongly suspect the
-         issue is importing from a file other than ntoskrnl.exe. So stick to that for now.
+ 
