@@ -1,6 +1,6 @@
+'Update 15 Nov 2026;  .
 Module modFltMgr
-'UPDATED 22 Mar 2025 MOST RECENT
-
+    
 Public Type FLT_OPERATION_REGISTRATION
     MajorFunction As Byte
     Flags As Long
@@ -71,8 +71,8 @@ Public Type FLT_REGISTRATION
 End Type
 
 Public Enum FLT_FILTER_UNLOAD_FLAGS
-'If set, the OS has requested to unload this filter and the operation
-'can not be failed.
+    'If set, the OS has requested to unload this filter and the operation
+    'can not be failed.
     FLTFL_FILTER_UNLOAD_MANDATORY = &H00000001
 End Enum
 
@@ -126,7 +126,7 @@ End Type
 
 Public Delegate Sub FLT_CONTEXT_CLEANUP_CALLBACK (ByVal Context As LongPtr, [TypeHint(FLT_CONTEXT_TYPE)] ByVal ContextType As Integer)
 
-Public Delegate Sub FLT_CONTEXT_ALLOCATE_CALLBACK (ByVal PoolType As POOL_TYPE, ByVal Size As LongPtr, [TypeHint(FLT_CONTEXT_TYPE)] ByVal ContextType As Integer)
+Public Delegate Function FLT_CONTEXT_ALLOCATE_CALLBACK (ByVal PoolType As POOL_TYPE, ByVal Size As LongPtr, [TypeHint(FLT_CONTEXT_TYPE)] ByVal ContextType As Integer) As LongPtr
 Public Delegate Sub FLT_CONTEXT_FREE_CALLBACK (ByVal Pool As LongPtr, [TypeHint(FLT_CONTEXT_TYPE)] ByVal ContextType As Integer)
 
 Public Enum FLT_CONTEXT_REGISTRATION_FLAGS
@@ -232,12 +232,12 @@ Public Const IRP_MJ_RELEASE_FOR_MOD_WRITE As Byte = &HFC
 Public Const IRP_MJ_ACQUIRE_FOR_CC_FLUSH As Byte = &HFB
 Public Const IRP_MJ_RELEASE_FOR_CC_FLUSH As Byte = &HFA
 Public Const IRP_MJ_QUERY_OPEN As Byte = &HF9
-Public Const IRP_MJ_FAST_IO_CHECK_IF_POSSIBLE As Byte = &HF4
-Public Const IRP_MJ_NETWORK_QUERY_OPEN As Byte = &HF3
-Public Const IRP_MJ_MDL_READ As Byte = &HF2
-Public Const IRP_MJ_MDL_READ_COMPLETE As Byte = &HF1
-Public Const IRP_MJ_PREPARE_MDL_WRITE As Byte = &HF0
-Public Const IRP_MJ_MDL_WRITE_COMPLETE As Byte = &HEF
+Public Const IRP_MJ_FAST_IO_CHECK_IF_POSSIBLE As Byte = &HF3
+Public Const IRP_MJ_NETWORK_QUERY_OPEN As Byte = &HF2
+Public Const IRP_MJ_MDL_READ As Byte = &HF1
+Public Const IRP_MJ_MDL_READ_COMPLETE As Byte = &HF0
+Public Const IRP_MJ_PREPARE_MDL_WRITE As Byte = &HEF
+Public Const IRP_MJ_MDL_WRITE_COMPLETE As Byte = &HEE
 Public Const IRP_MJ_VOLUME_MOUNT As Byte = &HED
 Public Const IRP_MJ_VOLUME_DISMOUNT As Byte = &HEC
 
@@ -369,10 +369,18 @@ Public Enum FLT_ALLOCATE_CALLBACK_DATA_FLAGS
     FLT_ALLOCATE_CALLBACK_DATA_PREALLOCATE_ALL_MEMORY = &H1
 End Enum
 
+[Description("The following options for the Parameters union are currently defined:\" & vbCrLf & _
+                "FLT_PARAMETERS_Create (IRP_MJ_CREATE)\" & vbCrLf & _
+                "FLT_PARAMETERS_Read (IRP_MJ_READ\" & vbCrLf & _
+                "FLT_PARAMETERS_Write (IRP_MJ_WRITE)\" & vbCrLf & _
+                "FLT_PARAMETERS_SetFileInformation (IRP_MJ_SET_INFORMATION)\" & vbCrLf & _
+                "FLT_PARAMETERS_SetVolumeInformation (IRP_MJ_SET_VOLUME_INFORMATION)\" & vbCrLf & _
+                "FLT_PARAMETERS_DeviceIoControl_Buffered (IRP_MJ_DEVICE_CONTROL or IRP_MJ_INTERNAL_DEVICE_CONTROL, with METHOD_BUFFERED.)\" & vbCrLf & _
+                "FLT_PARAMETERS_Others - A generic version for custom queries.")]
 Public Type FLT_IO_PARAMETER_BLOCK
     '  Fields from IRP
     '  Flags
-    IrpFlags As Long
+    IrpFlags As IrpFlags
     '  Major/minor functions from IRP
     MajorFunction As Byte
     MinorFunction As Byte
@@ -388,15 +396,14 @@ Public Type FLT_IO_PARAMETER_BLOCK
     TargetInstance As LongPtr 'PFLT_INSTANCE
     '  Normalized parameters for the operation
     'Parameters As FLT_PARAMETERS
-    [Description("The following options for the Parameters union are currently defined:" & vbCrLf & _
-                    "FLT_PARAMETERS_Create (IRP_MJ_CREATE)" & _
-                    "FLT_PARAMETERS_Read (IRP_MJ_READ)" & _
-                    "FLT_PARAMETERS_Write (IRP_MJ_WRITE)" & _
-                    "FLT_PARAMETERS_SetFileInformation (IRP_MJ_SET_INFORMATION)" & _
-                    "FLT_PARAMETERS_SetVolumeInformation (IRP_MJ_SET_VOLUME_INFORMATION)" & _
-                    "FLT_PARAMETERS_DeviceIoControl_Buffered (IRP_MJ_DEVICE_CONTROL or IRP_MJ_INTERNAL_DEVICE_CONTROL, with METHOD_BUFFERED.)" & _
+    [Description("The following options for the Parameters union are currently defined:\" & vbCrLf & _
+                    "FLT_PARAMETERS_Create (IRP_MJ_CREATE)\" & vbCrLf & _
+                    "FLT_PARAMETERS_Read (IRP_MJ_READ\" & vbCrLf & _
+                    "FLT_PARAMETERS_Write (IRP_MJ_WRITE)\" & vbCrLf & _
+                    "FLT_PARAMETERS_SetFileInformation (IRP_MJ_SET_INFORMATION)\" & vbCrLf & _
+                    "FLT_PARAMETERS_SetVolumeInformation (IRP_MJ_SET_VOLUME_INFORMATION)\" & vbCrLf & _
+                    "FLT_PARAMETERS_DeviceIoControl_Buffered (IRP_MJ_DEVICE_CONTROL or IRP_MJ_INTERNAL_DEVICE_CONTROL, with METHOD_BUFFERED.)\" & vbCrLf & _
                     "FLT_PARAMETERS_Others - A generic version for custom queries.")]
-    
     #If Win64 Then
         Parameters(47) As Byte
     #Else
@@ -413,12 +420,12 @@ Public Type FLT_PARAMETERS_Create
         '  The high 8 bits contains the CreateDisposition values.
         Options As FileAccessFlags
         #If Win64 Then
-        POINTER_ALIGNMENT(3) As Byte
+        ___POINTER_ALIGNMENT(3) As Byte
         #End If
         FileAttributes As Integer 'POINTER_ALIGNMENT
         ShareAccess As Integer
         #If Win64 Then
-        POINTER_ALIGNMENT2(3) As Byte
+        ___POINTER_ALIGNMENT2(3) As Byte
         #End If
         EaLength As Long 'POINTER_ALIGNMENT
         EaBuffer As LongPtr 'Not in IO_STACK_LOCATION parameters list
@@ -430,7 +437,7 @@ End Type
 Public Type FLT_PARAMETERS_Read
     Length As Long
     #If Win64 Then
-    POINTER_ALIGNMENT(3) As Byte
+    ___POINTER_ALIGNMENT(3) As Byte
     #End If
     Key As Long
     ByteOffset As LARGE_INTEGER
@@ -443,7 +450,7 @@ End Type
 Public Type FLT_PARAMETERS_Write
     Length As Long
     #If Win64 Then
-    POINTER_ALIGNMENT(3) As Byte
+    ___POINTER_ALIGNMENT(3) As Byte
     #End If
     Key As Long
     ByteOffset As LARGE_INTEGER
@@ -456,7 +463,7 @@ End Type
 Public Type FLT_PARAMETERS_SetFileInformation
     Length As Long
     #If Win64 Then
-    POINTER_ALIGNMENT(3) As Byte
+    ___POINTER_ALIGNMENT(3) As Byte
     #End If
     FileInformationClass As FILE_INFORMATION_CLASS
     ParentOfTarget As LongPtr 'PFILE_OBJECT
@@ -511,6 +518,9 @@ Public Type FLT_PARAMETERS_FsControl_Common
     POINTER_ALIGNMENT2(3) As Byte
     #End If
     FsControlCode As Long
+    #If Win64 Then
+    POINTER_ALIGNMENT3(3) As Byte
+    #End If
 End Type
 #If Win64 = 0 Then
 [PackingAlignment(4)]
@@ -662,7 +672,7 @@ Public Declare PtrSafe Function FltIsFltMgrVolumeDeviceObject Lib "Fltmgr.sys" (
 Public Declare PtrSafe Function FltGetDeviceObject Lib "Fltmgr.sys" (ByVal Volume As LongPtr, DeviceObject As LongPtr) As NTSTATUS
 Public Declare PtrSafe Function FltGetDiskDeviceObject Lib "Fltmgr.sys" (ByVal Volume As LongPtr, DiskDeviceObject As LongPtr) As NTSTATUS
 Public Declare PtrSafe Function FltGetLowerInstance Lib "Fltmgr.sys" (ByVal CurrentInstance As LongPtr, LowerInstance As LongPtr) As NTSTATUS
-Public Declare PtrSafe Function FltGettUpperInstance Lib "Fltmgr.sys" (ByVal CurrentInstance As LongPtr, UpperInstance As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetUpperInstance Lib "Fltmgr.sys" (ByVal CurrentInstance As LongPtr, UpperInstance As LongPtr) As NTSTATUS
 Public Declare PtrSafe Function FltGetTopInstance Lib "Fltmgr.sys" (ByVal Volume As LongPtr, Instance As LongPtr) As NTSTATUS
 Public Declare PtrSafe Function FltGetBottomInstance Lib "Fltmgr.sys" (ByVal Volume As LongPtr, Instance As LongPtr) As NTSTATUS
 Public Declare PtrSafe Function FltCompareInstanceAltitudes Lib "Fltmgr.sys" (ByVal Instance1 As LongPtr, ByVal Instance2 As LongPtr) As Long
@@ -688,14 +698,17 @@ Public Declare PtrSafe Function FltQueryInformationFile Lib "Fltmgr.sys" (ByVal 
 Public Declare PtrSafe Function FltSetInformationFile Lib "Fltmgr.sys" (ByVal Instance As LongPtr, FileObject As FILE_OBJECT, FileInformation As Any, ByVal Length As Long, ByVal FileInformationClass As FILE_INFORMATION_CLASS) As NTSTATUS
 Public Declare PtrSafe Function FltIsDirectory Lib "Fltmgr.sys" (FileObject As FILE_OBJECT, ByVal Instance As LongPtr, IsDirectory As Byte) As NTSTATUS
 Public Declare PtrSafe Function FltGetFileNameInformation Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA, ByVal NameOptions As FLT_FILE_NAME_OPTIONS, FileNameInformation As LongPtr) As NTSTATUS
-Public Declare PtrSafe Function FltGetFileNameInformationUnsafe Lib "Fltmgr.sys" (FileObject As FILE_OBJECT, ByVal Instance As LongPtr, FileNameInformation As LongPtr) As NTSTATUS
+Public Declare PtrSafe Function FltGetFileNameInformationUnsafe Lib "Fltmgr.sys" (FileObject As FILE_OBJECT, ByVal Instance As LongPtr, ByVal NameOptions As FLT_FILE_NAME_OPTIONS, FileNameInformation As LongPtr) As NTSTATUS
 Public Declare PtrSafe Function FltParseFileNameInformation Lib "Fltmgr.sys" (FileNameInformation As FLT_FILE_NAME_INFORMATION) As NTSTATUS
 Public Declare PtrSafe Sub FltReleaseFileNameInformation Lib "Fltmgr.sys" (FileNameInformation As FLT_FILE_NAME_INFORMATION)
 
 Public Delegate Sub FLT_COMPLETE_CANCELED_CALLBACK (CallbackData As FLT_CALLBACK_DATA)
 Public Declare PtrSafe Function FltCancelIo Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA) As Byte
-Public Declare PtrSafe Function FltSetCancelCompletion Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA) As NTSTATUS
-Public Declare PtrSafe Function FltClearCancelCompletion Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA, ByVal CanceledCallback As FLT_COMPLETE_CANCELED_CALLBACK) As NTSTATUS
+Public Declare PtrSafe Function FltSetCancelCompletion Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA, ByVal CanceledCallback As FLT_COMPLETE_CANCELED_CALLBACK) As NTSTATUS
+Public Declare PtrSafe Function FltClearCancelCompletion Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA) As NTSTATUS
 Public Declare PtrSafe Function FltIsIoCanceled Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA) As Byte
+
+Public Declare PtrSafe Function FltGetRequestorProcessId Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA) As Long
+Public Declare PtrSafe Function FltGetRequestorProcessIdEx Lib "Fltmgr.sys" (CallbackData As FLT_CALLBACK_DATA) As LongPtr
 
 End Module

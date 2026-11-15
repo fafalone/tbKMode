@@ -1,3 +1,4 @@
+'Update 15 Nov 2026;  .
 Module modDisk
 
     Public Enum MEDIA_TYPE
@@ -52,7 +53,7 @@ Module modDisk
     Public Const REMLOCK_MAXIMUM = 1
     Public Const REMLOCK_HIGHWATER = 10
 
-    Public Const DEFAULT_DISK_SIZE = (1024 * 1024) '1MB
+    Public Const DEFAULT_DISK_SIZE As Long = (1024& * 1024) '1MB
     Public Const DEFAULT_ROOT_DIR_ENTRIES = 512
     Public Const DEFAULT_SECTORS_PER_CLUSTER = 2
     Public DEFAULT_DRIVE_LETTER As String = "Z:"
@@ -78,7 +79,7 @@ Module modDisk
         DiskGeometry As DISK_GEOMETRY
         DiskRegInfo As DISK_INFO
         SymbolicLink As UNICODE_STRING
-        DriverLetterBuffer(0 To (DRIVE_LETTER_BUFFER_SIZE - 1)) As Integer
+        DriveLetterBuffer(0 To (DRIVE_LETTER_BUFFER_SIZE - 1)) As Integer
         DosDeviceNameBuffer(0 To (DOS_DEVNAME_BUFFER_SIZE - 1)) As Integer
     End Type
 
@@ -94,7 +95,7 @@ Module modDisk
                            'use this structure to return the name, which never changes, "RAMDisk", so we can fix it at 14 bytes.
     End Type
 
-    [ PackingAlignment (1) ]
+    [PackingAlignment(1)]
     Public Type BOOT_SECTOR
         bsJump(2) As Byte
         bsOemName(7) As Byte
@@ -120,12 +121,12 @@ Module modDisk
         bsSig2(1) As Byte
     End Type 'Expected cb=512
 
-    [ PackingAlignment (1) ]
+    [PackingAlignment(1)]
     Public Type DIR_ENTRY
         deName(7) As Byte
         deExtension(2) As Byte
         deAttributes As Byte
-        deReserved As Byte
+        deReserved(0 To 9) As Byte
         deTime As Integer
         deDate As Integer
         deStartCluster As Integer

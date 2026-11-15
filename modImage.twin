@@ -1,0 +1,1584 @@
+'Update 01 June 2025;  .
+Module modImage
+
+    Public Const IMAGE_DOS_SIGNATURE  = &H5A4D  ' MZ
+    Public Const IMAGE_OS2_SIGNATURE  = &H454E  ' NE
+    Public Const IMAGE_OS2_SIGNATURE_LE  = &H454C  ' LE
+    Public Const IMAGE_VXD_SIGNATURE  = &H454C  ' LE
+    Public Const IMAGE_NT_SIGNATURE  = &H00004550  ' PE00
+
+
+    Public Type IMAGE_DOS_HEADER ' DOS .EXE header
+        e_magic As Integer ' Magic number
+        e_cblp As Integer ' Bytes on last page of file
+        e_cp As Integer ' Pages in file
+        e_crlc As Integer ' Relocations
+        e_cparhdr As Integer ' Size of header in paragraphs
+        e_minalloc As Integer ' Minimum extra paragraphs needed
+        e_maxalloc As Integer ' Maximum extra paragraphs needed
+        e_ss As Integer ' Initial (relative) SS value
+        e_sp As Integer ' Initial SP value
+        e_csum As Integer ' Checksum
+        e_ip As Integer ' Initial IP value
+        e_cs As Integer ' Initial (relative) CS value
+        e_lfarlc As Integer ' File address of relocation table
+        e_ovno As Integer ' Overlay number
+        e_res(0 To 3) As Integer ' Reserved words
+        e_oemid As Integer ' OEM identifier (for e_oeminfo)
+        e_oeminfo As Integer ' OEM information; e_oemid specific
+        e_res2(0 To 9) As Integer ' Reserved words
+        e_lfanew As Long ' File address of new exe header
+    End Type
+
+    Public Const IMAGE_SIZEOF_FILE_HEADER            = 20
+    Public Enum ImageFileCharacteristics
+        IMAGE_FILE_RELOCS_STRIPPED = &H0001  ' Relocation info stripped from file.
+        IMAGE_FILE_EXECUTABLE_IMAGE = &H0002  ' File is executable  (i.e. no unresolved external references).
+        IMAGE_FILE_LINE_NUMS_STRIPPED = &H0004  ' Line nunbers stripped from file.
+        IMAGE_FILE_LOCAL_SYMS_STRIPPED = &H0008  ' Local symbols stripped from file.
+        IMAGE_FILE_AGGRESIVE_WS_TRIM = &H0010  ' Aggressively trim working set
+        IMAGE_FILE_LARGE_ADDRESS_AWARE = &H0020  ' App can handle >2gb addresses
+        IMAGE_FILE_BYTES_REVERSED_LO = &H0080  ' Bytes of machine word are reversed.
+        IMAGE_FILE_32BIT_MACHINE = &H0100  ' 32 bit word machine.
+        IMAGE_FILE_DEBUG_STRIPPED = &H0200  ' Debugging info stripped from file in .DBG file
+        IMAGE_FILE_REMOVABLE_RUN_FROM_SWAP = &H0400  ' If Image is on removable media, copy and run from the swap file.
+        IMAGE_FILE_NET_RUN_FROM_SWAP = &H0800  ' If Image is on Net, copy and run from the swap file.
+        IMAGE_FILE_SYSTEM = &H1000  ' System File.
+        IMAGE_FILE_DLL = &H2000  ' File is a DLL.
+        IMAGE_FILE_UP_SYSTEM_ONLY = &H4000  ' File should only be run on a UP machine
+        IMAGE_FILE_BYTES_REVERSED_HI = &H8000&  ' Bytes of machine word are reversed.
+    End Enum
+    Public Enum ImageMachineType
+        IMAGE_FILE_MACHINE_UNKNOWN = 0
+        IMAGE_FILE_MACHINE_TARGET_HOST = &H0001  ' Useful for indicating we want to interact with the host and not a WoW guest.
+        IMAGE_FILE_MACHINE_I386 = &H014c  ' Intel 386.
+        IMAGE_FILE_MACHINE_R3000 = &H0162  ' MIPS little-endian, 0x160 big-endian
+        IMAGE_FILE_MACHINE_R4000 = &H0166  ' MIPS little-endian
+        IMAGE_FILE_MACHINE_R10000 = &H0168  ' MIPS little-endian
+        IMAGE_FILE_MACHINE_WCEMIPSV2 = &H0169  ' MIPS little-endian WCE v2
+        IMAGE_FILE_MACHINE_ALPHA = &H0184  ' Alpha_AXP
+        IMAGE_FILE_MACHINE_SH3 = &H01a2  ' SH3 little-endian
+        IMAGE_FILE_MACHINE_SH3DSP = &H01a3
+        IMAGE_FILE_MACHINE_SH3E = &H01a4  ' SH3E little-endian
+        IMAGE_FILE_MACHINE_SH4 = &H01a6  ' SH4 little-endian
+        IMAGE_FILE_MACHINE_SH5 = &H01a8  ' SH5
+        IMAGE_FILE_MACHINE_ARM = &H01c0  ' ARM Little-Endian
+        IMAGE_FILE_MACHINE_THUMB = &H01c2  ' ARM Thumb/Thumb-2 Little-Endian
+        IMAGE_FILE_MACHINE_ARMNT = &H01c4  ' ARM Thumb-2 Little-Endian
+        IMAGE_FILE_MACHINE_AM33 = &H01d3
+        IMAGE_FILE_MACHINE_POWERPC = &H01F0  ' IBM PowerPC Little-Endian
+        IMAGE_FILE_MACHINE_POWERPCFP = &H01f1
+        IMAGE_FILE_MACHINE_IA64 = &H0200  ' Intel 64
+        IMAGE_FILE_MACHINE_MIPS16 = &H0266  ' MIPS
+        IMAGE_FILE_MACHINE_ALPHA64 = &H0284  ' ALPHA64
+        IMAGE_FILE_MACHINE_MIPSFPU = &H0366  ' MIPS
+        IMAGE_FILE_MACHINE_MIPSFPU16 = &H0466  ' MIPS
+        IMAGE_FILE_MACHINE_AXP64 = IMAGE_FILE_MACHINE_ALPHA64
+        IMAGE_FILE_MACHINE_TRICORE = &H0520  ' Infineon
+        IMAGE_FILE_MACHINE_CEF = &H0CEF
+        IMAGE_FILE_MACHINE_EBC = &H0EBC  ' EFI Byte Code
+        IMAGE_FILE_MACHINE_AMD64 = &H8664&  ' AMD64 (K8)
+        IMAGE_FILE_MACHINE_M32R = &H9041&  ' M32R little-endian
+        IMAGE_FILE_MACHINE_ARM64 = &HAA64&  ' ARM64 Little-Endian
+        IMAGE_FILE_MACHINE_CEE = &HC0EE&
+        IMAGE_FILE_MACHINE_ARM64EC = &HA641&
+        IMAGE_FILE_MACHINE_ARM64X = &HA64E&
+    End Enum
+    Public Type IMAGE_FILE_HEADER
+        /* [ TypeHint(ImageMachineType) ] */ Machine As Integer
+        NumberOfSections As Integer
+        TimeDateStamp As Long
+        PointerToSymbolTable As Long
+        NumberOfSymbols As Long
+        SizeOfOptionalHeader As Integer
+        /* [ TypeHint(ImageFileCharacteristics) ] */ Characteristics As Integer
+    End Type
+
+    Public Type IMAGE_BASE_RELOCATION
+        VirtualAddress As Long
+        SizeOfBlock As Long
+        '  WORD    TypeOffset[1];
+    End Type
+
+    Public Enum IMAGE_REL_NS_BASED
+        IMAGE_REL_BASED_ABSOLUTE = 0
+        IMAGE_REL_BASED_HIGH = 1
+        IMAGE_REL_BASED_LOW = 2
+        IMAGE_REL_BASED_HIGHLOW = 3
+        IMAGE_REL_BASED_HIGHADJ = 4
+        IMAGE_REL_BASED_MACHINE_SPECIFIC_5 = 5
+        IMAGE_REL_BASED_RESERVED = 6
+        IMAGE_REL_BASED_MACHINE_SPECIFIC_7 = 7
+        IMAGE_REL_BASED_MACHINE_SPECIFIC_8 = 8
+        IMAGE_REL_BASED_MACHINE_SPECIFIC_9 = 9
+        IMAGE_REL_BASED_DIR64 = 10
+    End Enum
+    Public Enum IMAGE_REL_BASED
+        IMAGE_REL_BASED_IA64_IMM64 = 9
+        IMAGE_REL_BASED_MIPS_JMPADDR = 5
+        IMAGE_REL_BASED_MIPS_JMPADDR16 = 9
+        IMAGE_REL_BASED_ARM_MOV32 = 5
+        IMAGE_REL_BASED_THUMB_MOV32 = 7
+    End Enum
+
+    Public Const IMAGE_ARCHIVE_START_SIZE  = 8
+    Public Const IMAGE_ARCHIVE_START  = "!<arch>\n"
+    Public Const IMAGE_ARCHIVE_END  = "`\n"
+    Public Const IMAGE_ARCHIVE_PAD  = "\n"
+    Public Const IMAGE_ARCHIVE_LINKER_MEMBER  = "/               "
+    Public Const IMAGE_ARCHIVE_LONGNAMES_MEMBER  = "//              "
+    Public Const IMAGE_ARCHIVE_HYBRIDMAP_MEMBER  = "/<HYBRIDMAP>/   "
+
+    Public Type IMAGE_ARCHIVE_MEMBER_HEADER
+        Name(0 To 15) As Byte ' File member name - `/' terminated.
+        Date(0 To 11) As Byte ' File member date - decimal.
+        UserID(0 To 5) As Byte ' File member user id - decimal.
+        GroupID(0 To 5) As Byte ' File member group id - decimal.
+        Mode(0 To 7) As Byte ' File member mode - octal.
+        Size(0 To 9) As Byte ' File member size - decimal.
+        EndHeader(0 To 1) As Byte ' String to end header.
+    End Type
+
+    Public Const IMAGE_SIZEOF_ARCHIVE_MEMBER_HDR = 60
+
+
+    Public Const IMAGE_ORDINAL_FLAG64  = &H8000000000000000
+    Public Const IMAGE_ORDINAL_FLAG32  = &H80000000
+    #If Win64 Then
+    Public Const IMAGE_ORDINAL_FLAG = IMAGE_ORDINAL_FLAG64
+    #Else
+    Public Const IMAGE_ORDINAL_FLAG = IMAGE_ORDINAL_FLAG32
+    #End If
+
+    Public Type IMAGE_DATA_DIRECTORY
+        VirtualAddress As Long
+        Size As Long
+    End Type
+
+    Public Type IMAGE_EXPORT_DIRECTORY
+        Characteristics As Long
+        TimeDateStamp As Long
+        MajorVersion As Integer
+        MinorVersion As Integer
+        Name As Long
+        Base As Long
+        NumberOfFunctions As Long
+        NumberOfNames As Long
+        AddressOfFunctions As Long ' RVA from base of image
+        AddressOfNames As Long ' RVA from base of image
+        AddressOfNameOrdinals As Long ' RVA from base of image
+    End Type
+    ' typedef struct _IMAGE_THUNK_DATA64 {
+    ' union {
+        ' ULONGLONG ForwarderString;  // PBYTE 
+        ' ULONGLONG Function;         // PDWORD
+        ' ULONGLONG Ordinal;
+        ' ULONGLONG AddressOfData;    // PIMAGE_IMPORT_BY_NAME
+    ' } u1;
+    ' } IMAGE_THUNK_DATA64;
+    Public Type IMAGE_THUNK_DATA32
+        u1 As Long
+    End Type
+    Public Type IMAGE_THUNK_DATA64
+        u1 As LongLong
+    End Type
+    /*
+    #If Win64 Then
+    Alias IMAGE_THUNK_DATA As IMAGE_THUNK_DATA64
+    #Else
+    Alias IMAGE_THUNK_DATA As IMAGE_THUNK_DATA32
+    #End If
+    */
+    Public Type IMAGE_THUNK_DATA
+        u1 As LongPtr
+    End Type
+
+    Public Type IMAGE_TLS_DIRECTORY32
+        StartAddressOfRawData As Long
+        EndAddressOfRawData As Long
+        AddressOfIndex As Long ' PDWORD
+        AddressOfCallBacks As Long ' PIMAGE_TLS_CALLBACK *
+        SizeOfZeroFill As Long
+        'union {
+        Characteristics As Long
+        '     struct {
+        '         DWORD Reserved0 : 20;
+        '         DWORD Alignment : 4;
+        '          DWORD Reserved1 : 8;
+        '      } DUMMYSTRUCTNAME;
+        '  } DUMMYUNIONNAME;
+    End Type
+    Public Type IMAGE_TLS_DIRECTORY64
+        StartAddressOfRawData As LongLong
+        EndAddressOfRawData As LongLong
+        AddressOfIndex As LongLong ' PDWORD
+        AddressOfCallBacks As LongLong ' PIMAGE_TLS_CALLBACK *
+        SizeOfZeroFill As Long
+        'union {
+        Characteristics As Long
+        '     struct {
+        '         DWORD Reserved0 : 20;
+        '         DWORD Alignment : 4;
+        '          DWORD Reserved1 : 8;
+        '      } DUMMYSTRUCTNAME;
+        '  } DUMMYUNIONNAME;
+    End Type
+    Public Type IMAGE_TLS_DIRECTORY
+        StartAddressOfRawData As LongPtr
+        EndAddressOfRawData As LongPtr
+        AddressOfIndex As LongPtr ' PDWORD
+        AddressOfCallBacks As LongPtr ' PIMAGE_TLS_CALLBACK *
+        SizeOfZeroFill As Long
+        'union {
+        Characteristics As Long
+        '     struct {
+        '         DWORD Reserved0 : 20;
+        '         DWORD Alignment : 4;
+        '          DWORD Reserved1 : 8;
+        '      } DUMMYSTRUCTNAME;
+        '  } DUMMYUNIONNAME;
+    End Type
+
+    Public Type IMAGE_DELAYLOAD_DESCRIPTOR
+        'union {
+        AllAttributes As Long
+        '    struct {
+        '        DWORD RvaBased : 1;             // Delay load version 2
+        '        DWORD ReservedAttributes : 31;
+        '    } DUMMYSTRUCTNAME;
+        '} Attributes;
+        DllNameRVA As Long ' RVA to the name of the target library (NULL-terminate ASCII string)
+        ModuleHandleRVA As Long ' RVA to the HMODULE caching location (PHMODULE)
+        ImportAddressTableRVA As Long ' RVA to the start of the IAT (PIMAGE_THUNK_DATA)
+        ImportNameTableRVA As Long ' RVA to the start of the name table (PIMAGE_THUNK_DATA::AddressOfData)
+        BoundImportAddressTableRVA As Long ' RVA to an optional bound IAT
+        UnloadInformationTableRVA As Long ' RVA to an optional unload info table
+        TimeDateStamp As Long ' 0 if not bound,
+        ' Otherwise, date/time of the target DLL
+    End Type
+
+    Public Type IMAGE_RESOURCE_DIRECTORY
+        Characteristics As Long
+        TimeDateStamp As Long
+        MajorVersion As Integer
+        MinorVersion As Integer
+        NumberOfNamedEntries As Integer
+        NumberOfIdEntries As Integer
+        '  IMAGE_RESOURCE_DIRECTORY_ENTRY DirectoryEntries[];
+    End Type
+
+    Public Const IMAGE_RESOURCE_NAME_IS_STRING  = &H80000000
+    Public Const IMAGE_RESOURCE_DATA_IS_DIRECTORY  = &H80000000
+
+    ' // Each directory contains the 32-bit Name of the entry and an offset,
+    ' // relative to the beginning of the resource directory of the data associated
+    ' // with this directory entry.  If the name of the entry is an actual text
+    ' // string instead of an integer Id, then the high order bit of the name field
+    ' // is set to one and the low order 31-bits are an offset, relative to the
+    ' // beginning of the resource directory of the string, which is of type
+    ' // IMAGE_RESOURCE_DIRECTORY_STRING.  Otherwise the high bit is clear and the
+    ' // low-order 16-bits are the integer Id that identify this resource directory
+    ' // entry. If the directory entry is yet another resource directory (i.e. a
+    ' // subdirectory), then the high order bit of the offset field will be
+    ' // set to indicate this.  Otherwise the high bit is clear and the offset
+    ' // field points to a resource data entry.
+    ' //
+
+    ' //@[comment("MVI_tracked")]
+    ' typedef struct _IMAGE_RESOURCE_DIRECTORY_ENTRY {
+        ' union {
+            ' struct {
+                ' DWORD NameOffset:31;
+                ' DWORD NameIsString:1;
+            ' } DUMMYSTRUCTNAME;
+            ' DWORD   Name;
+            ' WORD    Id;
+        ' } DUMMYUNIONNAME;
+        ' union {
+            ' DWORD   OffsetToData;
+            ' struct {
+                ' DWORD   OffsetToDirectory:31;
+                ' DWORD   DataIsDirectory:1;
+            ' } DUMMYSTRUCTNAME2;
+        ' } DUMMYUNIONNAME2;
+    ' } IMAGE_RESOURCE_DIRECTORY_ENTRY, *PIMAGE_RESOURCE_DIRECTORY_ENTRY;
+    Public Type IMAGE_RESOURCE_DIRECTORY_ENTRY
+        Name As Long
+        OffsetToData As Long
+    End Type
+    [Description("⚠️ **WARNING:** Do not copy this all at once. Use length to determine what to copy.")]
+    Public Type IMAGE_RESOURCE_DIRECTORY_STRING
+        Length As Integer
+        NameString(0 To 79) As Byte
+    End Type
+    [Description("⚠️ **WARNING:** Do not copy this all at once. Use length to determine what to copy.")]
+    Public Type IMAGE_RESOURCE_DIR_STRING_U
+        Length As Integer
+        NameString(0 To 79) As Integer
+    End Type
+
+    Public Type IMAGE_RESOURCE_DATA_ENTRY
+        OffsetToData As Long
+        Size As Long
+        CodePage As Long
+        Reserved As Long
+    End Type
+
+
+
+
+
+    Public Type IMAGE_IMPORT_DESCRIPTOR
+        'union {
+        '   DWORD   Characteristics;            // 0 for terminating null import descriptor
+        '     DWORD   OriginalFirstThunk;         // RVA to original unbound IAT (PIMAGE_THUNK_DATA)
+        ' } DUMMYUNIONNAME;
+        [Description("Union of Characteristics and OriginalFirstThunk")]
+        ChrctrsOrOrigThunk As Long
+        TimeDateStamp As Long ' 0 if not bound,
+        ' -1 if bound, and real date\time stamp
+        '     in IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT (new BIND)
+        ' O.W. date/time stamp of DLL bound to (Old BIND)
+        ForwarderChain As Long ' -1 if no forwarders
+        Name As Long
+        FirstThunk As Long ' RVA to IAT (if bound this IAT has actual addresses)
+    End Type
+    Public Type IMAGE_BOUND_IMPORT_DESCRIPTOR
+        TimeDateStamp As Long
+        OffsetModuleName As Integer
+        NumberOfModuleForwarderRefs As Integer
+        ' Array of zero or more IMAGE_BOUND_FORWARDER_REF follows
+    End Type
+    Public Type IMAGE_BOUND_FORWARDER_REF
+        TimeDateStamp As Long
+        OffsetModuleName As Integer
+        Reserved As Integer
+    End Type
+    Public Type IMAGE_IMPORT_BY_NAME
+        Hint As Integer
+        Name(0 To 99) As Byte
+    End Type
+
+    Public Const IMAGE_NUMBEROF_DIRECTORY_ENTRIES   = 16
+
+    Public Enum ImageSubsystemType
+        IMAGE_SUBSYSTEM_UNKNOWN = 0  ' Unknown subsystem.
+        IMAGE_SUBSYSTEM_NATIVE = 1  ' Image doesn't require a subsystem.
+        IMAGE_SUBSYSTEM_WINDOWS_GUI = 2  ' Image runs in the Windows GUI subsystem.
+        IMAGE_SUBSYSTEM_WINDOWS_CUI = 3  ' Image runs in the Windows character subsystem.
+        IMAGE_SUBSYSTEM_OS2_CUI = 5  ' image runs in the OS/2 character subsystem.
+        IMAGE_SUBSYSTEM_POSIX_CUI = 7  ' image runs in the Posix character subsystem.
+        IMAGE_SUBSYSTEM_NATIVE_WINDOWS = 8  ' image is a native Win9x driver.
+        IMAGE_SUBSYSTEM_WINDOWS_CE_GUI = 9  ' Image runs in the Windows CE subsystem.
+        IMAGE_SUBSYSTEM_EFI_APPLICATION = 10  '
+        IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER = 11  '
+        IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER = 12  '
+        IMAGE_SUBSYSTEM_EFI_ROM = 13
+        IMAGE_SUBSYSTEM_XBOX = 14
+        IMAGE_SUBSYSTEM_WINDOWS_BOOT_APPLICATION = 16
+        IMAGE_SUBSYSTEM_XBOX_CODE_CATALOG = 17
+    End Enum
+    Public Enum ImageDllCharacteristics
+        IMAGE_LIBRARY_PROCESS_INIT = &H0001  ' Reserved.
+        IMAGE_LIBRARY_PROCESS_TERM = &H0002  ' Reserved.
+        IMAGE_LIBRARY_THREAD_INIT = &H0004  ' Reserved.
+        IMAGE_LIBRARY_THREAD_TERM = &H0008  ' Reserved.
+        IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA = &H0020  ' Image can handle a high entropy 64-bit virtual address space.
+        IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = &H0040  ' DLL can move.
+        IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY = &H0080  ' Code Integrity Image
+        IMAGE_DLLCHARACTERISTICS_NX_COMPAT = &H0100  ' Image is NX compatible
+        IMAGE_DLLCHARACTERISTICS_NO_ISOLATION = &H0200  ' Image understands isolation and doesn't want it
+        IMAGE_DLLCHARACTERISTICS_NO_SEH = &H0400  ' Image does not use SEH.  No SE handler may reside in this image
+        IMAGE_DLLCHARACTERISTICS_NO_BIND = &H0800  ' Do not bind this image.
+        IMAGE_DLLCHARACTERISTICS_APPCONTAINER = &H1000  ' Image should execute in an AppContainer
+        IMAGE_DLLCHARACTERISTICS_WDM_DRIVER = &H2000  ' Driver uses WDM model
+        IMAGE_DLLCHARACTERISTICS_GUARD_CF = &H4000  ' Image supports Control Flow Guard.
+        IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE = &H8000&
+    End Enum
+    Public Enum ImageDirectories
+        IMAGE_DIRECTORY_ENTRY_EXPORT = 0  ' Export Directory
+        IMAGE_DIRECTORY_ENTRY_IMPORT = 1  ' Import Directory
+        IMAGE_DIRECTORY_ENTRY_RESOURCE = 2  ' Resource Directory
+        IMAGE_DIRECTORY_ENTRY_EXCEPTION = 3  ' Exception Directory
+        IMAGE_DIRECTORY_ENTRY_SECURITY = 4  ' Security Directory
+        IMAGE_DIRECTORY_ENTRY_BASERELOC = 5  ' Base Relocation Table
+        IMAGE_DIRECTORY_ENTRY_DEBUG = 6  ' Debug Directory
+    '       IMAGE_DIRECTORY_ENTRY_COPYRIGHT       7   // (X86 usage)
+        IMAGE_DIRECTORY_ENTRY_ARCHITECTURE = 7  ' Architecture Specific Data
+        IMAGE_DIRECTORY_ENTRY_GLOBALPTR = 8  ' RVA of GP
+        IMAGE_DIRECTORY_ENTRY_TLS = 9  ' TLS Directory
+        IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG = 10  ' Load Configuration Directory
+        IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT = 11  ' Bound Import Directory in headers
+        IMAGE_DIRECTORY_ENTRY_IAT = 12  ' Import Address Table
+        IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT = 13  ' Delay Load Import Descriptors
+        IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR = 14  ' COM Runtime descriptor
+    End Enum
+
+    Public Enum IMAGE_MAGIC_VALUES
+        IMAGE_NT_OPTIONAL_HDR32_MAGIC = &H10b
+        IMAGE_NT_OPTIONAL_HDR64_MAGIC = &H20b
+        IMAGE_ROM_OPTIONAL_HDR_MAGIC = &H107
+    End Enum
+
+    Public Type IMAGE_OPTIONAL_HEADER
+        ' Standard fields.
+        /* [ TypeHint(IMAGE_MAGIC_VALUES) ] */ Magic As Integer
+        MajorLinkerVersion As Byte
+        MinorLinkerVersion As Byte
+        SizeOfCode As Long
+        SizeOfInitializedData As Long
+        SizeOfUninitializedData As Long
+        AddressOfEntryPoint As Long
+        BaseOfCode As Long
+        #If Win64 = 0 Then
+        BaseOfData As Long
+        #End If
+        ' NT additional fields.
+        ImageBase As LongPtr
+        SectionAlignment As Long
+        FileAlignment As Long
+        MajorOperatingSystemVersion As Integer
+        MinorOperatingSystemVersion As Integer
+        MajorImageVersion As Integer
+        MinorImageVersion As Integer
+        MajorSubsystemVersion As Integer
+        MinorSubsystemVersion As Integer
+        Win32VersionValue As Long
+        SizeOfImage As Long
+        SizeOfHeaders As Long
+        CheckSum As Long
+        /* [ TypeHint(ImageSubsystemType) ] */ Subsystem As Integer
+        /* [ TypeHint(ImageDllCharacteristics) ] */ DllCharacteristics As Integer
+        SizeOfStackReserve As LongPtr
+        SizeOfStackCommit As LongPtr
+        SizeOfHeapReserve As LongPtr
+        SizeOfHeapCommit As LongPtr
+        LoaderFlags As Long
+        NumberOfRvaAndSizes As Long
+        DataDirectory(0 To (IMAGE_NUMBEROF_DIRECTORY_ENTRIES - 1)) As IMAGE_DATA_DIRECTORY
+    End Type
+    Public Type IMAGE_OPTIONAL_HEADER32
+        ' Standard fields.
+        Magic As Integer
+        MajorLinkerVersion As Byte
+        MinorLinkerVersion As Byte
+        SizeOfCode As Long
+        SizeOfInitializedData As Long
+        SizeOfUninitializedData As Long
+        AddressOfEntryPoint As Long
+        BaseOfCode As Long
+        BaseOfData As Long
+        ' NT additional fields.
+        ImageBase As Long
+        SectionAlignment As Long
+        FileAlignment As Long
+        MajorOperatingSystemVersion As Integer
+        MinorOperatingSystemVersion As Integer
+        MajorImageVersion As Integer
+        MinorImageVersion As Integer
+        MajorSubsystemVersion As Integer
+        MinorSubsystemVersion As Integer
+        Win32VersionValue As Long
+        SizeOfImage As Long
+        SizeOfHeaders As Long
+        CheckSum As Long
+        /* [ TypeHint(ImageSubsystemType) ] */ Subsystem As Integer
+        /* [ TypeHint(ImageDllCharacteristics) ] */ DllCharacteristics As Integer
+        SizeOfStackReserve As Long
+        SizeOfStackCommit As Long
+        SizeOfHeapReserve As Long
+        SizeOfHeapCommit As Long
+        LoaderFlags As Long
+        NumberOfRvaAndSizes As Long
+        DataDirectory(0 To (IMAGE_NUMBEROF_DIRECTORY_ENTRIES - 1)) As IMAGE_DATA_DIRECTORY
+    End Type
+    Public Type IMAGE_OPTIONAL_HEADER64
+        Magic As Integer
+        MajorLinkerVersion As Byte
+        MinorLinkerVersion As Byte
+        SizeOfCode As Long
+        SizeOfInitializedData As Long
+        SizeOfUninitializedData As Long
+        AddressOfEntryPoint As Long
+        BaseOfCode As Long
+        ImageBase As LongLong
+        SectionAlignment As Long
+        FileAlignment As Long
+        MajorOperatingSystemVersion As Integer
+        MinorOperatingSystemVersion As Integer
+        MajorImageVersion As Integer
+        MinorImageVersion As Integer
+        MajorSubsystemVersion As Integer
+        MinorSubsystemVersion As Integer
+        Win32VersionValue As Long
+        SizeOfImage As Long
+        SizeOfHeaders As Long
+        CheckSum As Long
+        /* [ TypeHint(ImageSubsystemType) ] */ Subsystem As Integer
+        /* [ TypeHint(ImageDllCharacteristics) ] */ DllCharacteristics As Integer
+        SizeOfStackReserve As LongLong
+        SizeOfStackCommit As LongLong
+        SizeOfHeapReserve As LongLong
+        SizeOfHeapCommit As LongLong
+        LoaderFlags As Long
+        NumberOfRvaAndSizes As Long
+        DataDirectory(0 To (IMAGE_NUMBEROF_DIRECTORY_ENTRIES - 1)) As IMAGE_DATA_DIRECTORY
+    End Type
+
+    Public Type IMAGE_ROM_OPTIONAL_HEADER
+        Magic As Integer
+        MajorLinkerVersion As Byte
+        MinorLinkerVersion As Byte
+        SizeOfCode As Long
+        SizeOfInitializedData As Long
+        SizeOfUninitializedData As Long
+        AddressOfEntryPoint As Long
+        BaseOfCode As Long
+        BaseOfData As Long
+        BaseOfBss As Long
+        GprMask As Long
+        CprMask(0 To 3) As Long
+        GpValue As Long
+    End Type
+
+    Public Type IMAGE_ROM_HEADERS
+        FileHeader As IMAGE_FILE_HEADER
+        OptionalHeader As IMAGE_ROM_OPTIONAL_HEADER
+    End Type
+
+    Public Type IMAGE_NT_HEADERS
+        Signature As Long
+        FileHeader As IMAGE_FILE_HEADER
+        OptionalHeader As IMAGE_OPTIONAL_HEADER
+    End Type
+    Public Type IMAGE_NT_HEADERS32
+        Signature As Long
+        FileHeader As IMAGE_FILE_HEADER
+        OptionalHeader As IMAGE_OPTIONAL_HEADER32
+    End Type
+    Public Type IMAGE_NT_HEADERS64
+        Signature As Long
+        FileHeader As IMAGE_FILE_HEADER
+        OptionalHeader As IMAGE_OPTIONAL_HEADER64
+    End Type
+
+    Public Type ANON_OBJECT_HEADER
+        Sig1 As Integer ' Must be IMAGE_FILE_MACHINE_UNKNOWN
+        Sig2 As Integer ' Must be 0xffff
+        Version As Integer ' >= 1 (implies the CLSID field is present)
+        Machine As Integer
+        TimeDateStamp As Long
+        ClassID As UUID ' Used to invoke CoCreateInstance
+        SizeOfData As Long ' Size of data that follows the header
+    End Type
+    Public Type ANON_OBJECT_HEADER_V2
+        Sig1 As Integer ' Must be IMAGE_FILE_MACHINE_UNKNOWN
+        Sig2 As Integer ' Must be 0xffff
+        Version As Integer ' >= 2 (implies the Flags field is present - otherwise V1)
+        Machine As Integer
+        TimeDateStamp As Long
+        ClassID As UUID ' Used to invoke CoCreateInstance
+        SizeOfData As Long ' Size of data that follows the header
+        Flags As Long ' 0x1 -> contains metadata
+        MetaDataSize As Long ' Size of CLR metadata
+        MetaDataOffset As Long ' Offset of CLR metadata
+    End Type
+    Public Type ANON_OBJECT_HEADER_BIGOBJ
+        'same as ANON_OBJECT_HEADER_V2
+        Sig1 As Integer ' Must be IMAGE_FILE_MACHINE_UNKNOWN
+        Sig2 As Integer ' Must be 0xffff
+        Version As Integer ' >= 2 (implies the Flags field is present)
+        Machine As Integer ' Actual machine - IMAGE_FILE_MACHINE_xxx
+        TimeDateStamp As Long
+        ClassID As UUID ' {D1BAA1C7-BAEE-4ba9-AF20-FAF66AA4DCB8}
+        SizeOfData As Long ' Size of data that follows the header
+        Flags As Long ' 0x1 -> contains metadata
+        MetaDataSize As Long ' Size of CLR metadata
+        MetaDataOffset As Long ' Offset of CLR metadata
+        'bigobj specifics
+        NumberOfSections As Long ' extended from WORD
+        PointerToSymbolTable As Long
+        NumberOfSymbols As Long
+    End Type
+
+
+    Public Const IMAGE_SIZEOF_SECTION_HEADER     = 40
+    Public Const IMAGE_SIZEOF_SHORT_NAME        = 8
+    Public Type IMAGE_SECTION_HEADER
+        Name(0 To (IMAGE_SIZEOF_SHORT_NAME - 1)) As Byte
+        Misc As Long
+        VirtualAddress As Long
+        SizeOfRawData As Long
+        PointerToRawData As Long
+        PointerToRelocations As Long
+        PointerToLinenumbers As Long
+        NumberOfRelocations As Integer
+        NumberOfLinenumbers As Integer
+        Characteristics As ImageSectionCharacteristics
+    End Type
+
+    Public Enum ImageSectionCharacteristics
+        IMAGE_SCN_TYPE_REG = &H00000000  ' Reserved.
+        IMAGE_SCN_TYPE_DSECT = &H00000001  ' Reserved.
+        IMAGE_SCN_TYPE_NOLOAD = &H00000002  ' Reserved.
+        IMAGE_SCN_TYPE_GROUP = &H00000004  ' Reserved.
+        IMAGE_SCN_TYPE_NO_PAD = &H00000008  ' Reserved.
+        IMAGE_SCN_TYPE_COPY = &H00000010  ' Reserved.
+        IMAGE_SCN_CNT_CODE = &H00000020  ' Section contains code.
+        IMAGE_SCN_CNT_INITIALIZED_DATA = &H00000040  ' Section contains initialized data.
+        IMAGE_SCN_CNT_UNINITIALIZED_DATA = &H00000080  ' Section contains uninitialized data.
+        IMAGE_SCN_LNK_OTHER = &H00000100  ' Reserved.
+        IMAGE_SCN_LNK_INFO = &H00000200  ' Section contains comments or some other type of information.
+    '       IMAGE_SCN_TYPE_OVER                  0x00000400  // Reserved.
+        IMAGE_SCN_LNK_REMOVE = &H00000800  ' Section contents will not become part of image.
+        IMAGE_SCN_LNK_COMDAT = &H00001000  ' Section contents comdat.
+    '                                            0x00002000  // Reserved.
+    '       IMAGE_SCN_MEM_PROTECTED - Obsolete   0x00004000
+        IMAGE_SCN_NO_DEFER_SPEC_EXC = &H00004000  ' Reset speculative exceptions handling bits in the TLB entries for this section.
+        IMAGE_SCN_GPREL = &H00008000&  ' Section content can be accessed relative to GP
+        IMAGE_SCN_MEM_FARDATA = &H00008000&
+    '       IMAGE_SCN_MEM_SYSHEAP  - Obsolete    0x00010000
+        IMAGE_SCN_MEM_PURGEABLE = &H00020000
+        IMAGE_SCN_MEM_16BIT = &H00020000
+        IMAGE_SCN_MEM_LOCKED = &H00040000
+        IMAGE_SCN_MEM_PRELOAD = &H00080000
+        IMAGE_SCN_ALIGN_1BYTES = &H00100000  '
+        IMAGE_SCN_ALIGN_2BYTES = &H00200000  '
+        IMAGE_SCN_ALIGN_4BYTES = &H00300000  '
+        IMAGE_SCN_ALIGN_8BYTES = &H00400000  '
+        IMAGE_SCN_ALIGN_16BYTES = &H00500000  ' Default alignment if no others are specified.
+        IMAGE_SCN_ALIGN_32BYTES = &H00600000  '
+        IMAGE_SCN_ALIGN_64BYTES = &H00700000  '
+        IMAGE_SCN_ALIGN_128BYTES = &H00800000  '
+        IMAGE_SCN_ALIGN_256BYTES = &H00900000  '
+        IMAGE_SCN_ALIGN_512BYTES = &H00A00000  '
+        IMAGE_SCN_ALIGN_1024BYTES = &H00B00000  '
+        IMAGE_SCN_ALIGN_2048BYTES = &H00C00000  '
+        IMAGE_SCN_ALIGN_4096BYTES = &H00D00000  '
+        IMAGE_SCN_ALIGN_8192BYTES = &H00E00000  '
+    '  Unused                                    0x00F00000
+        IMAGE_SCN_ALIGN_MASK = &H00F00000
+        IMAGE_SCN_LNK_NRELOC_OVFL = &H01000000  ' Section contains extended relocations.
+        IMAGE_SCN_MEM_DISCARDABLE = &H02000000  ' Section can be discarded.
+        IMAGE_SCN_MEM_NOT_CACHED = &H04000000  ' Section is not cachable.
+        IMAGE_SCN_MEM_NOT_PAGED = &H08000000  ' Section is not pageable.
+        IMAGE_SCN_MEM_SHARED = &H10000000  ' Section is shareable.
+        IMAGE_SCN_MEM_EXECUTE = &H20000000  ' Section is executable.
+        IMAGE_SCN_MEM_READ = &H40000000  ' Section is readable.
+        IMAGE_SCN_MEM_WRITE = &H80000000  ' Section is writeable.
+    End Enum
+
+    Public Const IMAGE_SCN_SCALE_INDEX = 1
+
+    Public Enum IMAGE_SECTION_VALUES
+        IMAGE_SYM_UNDEFINED = 0  ' Symbol is undefined or is common.
+        IMAGE_SYM_ABSOLUTE = -1  ' Symbol is an absolute value.
+        IMAGE_SYM_DEBUG = -2  ' Symbol is a special debug item.
+        IMAGE_SYM_SECTION_MAX = &HFEFF&  ' Values 0xFF00-0xFFFF are special
+        IMAGE_SYM_SECTION_MAX_EX = MAXLONG
+    End Enum
+    Public Enum IMAGE_SYM_TYPE
+        IMAGE_SYM_TYPE_NULL = &H0000  ' no type.
+        IMAGE_SYM_TYPE_VOID = &H0001  '
+        IMAGE_SYM_TYPE_CHAR = &H0002  ' type character.
+        IMAGE_SYM_TYPE_SHORT = &H0003  ' type short integer.
+        IMAGE_SYM_TYPE_INT = &H0004  '
+        IMAGE_SYM_TYPE_LONG = &H0005  '
+        IMAGE_SYM_TYPE_FLOAT = &H0006  '
+        IMAGE_SYM_TYPE_DOUBLE = &H0007  '
+        IMAGE_SYM_TYPE_STRUCT = &H0008  '
+        IMAGE_SYM_TYPE_UNION = &H0009  '
+        IMAGE_SYM_TYPE_ENUM = &H000A  ' enumeration.
+        IMAGE_SYM_TYPE_MOE = &H000B  ' member of enumeration.
+        IMAGE_SYM_TYPE_BYTE = &H000C  '
+        IMAGE_SYM_TYPE_WORD = &H000D  '
+        IMAGE_SYM_TYPE_UINT = &H000E  '
+        IMAGE_SYM_TYPE_DWORD = &H000F  '
+        IMAGE_SYM_TYPE_PCODE = &H8000&  '
+    End Enum
+    Public Enum IMAGE_SYM_TYPE_DERIVED
+        IMAGE_SYM_DTYPE_NULL = 0  ' no derived type.
+        IMAGE_SYM_DTYPE_POINTER = 1  ' pointer.
+        IMAGE_SYM_DTYPE_FUNCTION = 2  ' function.
+        IMAGE_SYM_DTYPE_ARRAY = 3  ' array.
+    End Enum
+    Public Enum IMAGE_STORAGE_CLASS
+        IMAGE_SYM_CLASS_END_OF_FUNCTION = -1
+        IMAGE_SYM_CLASS_NULL = &H0000
+        IMAGE_SYM_CLASS_AUTOMATIC = &H0001
+        IMAGE_SYM_CLASS_EXTERNAL = &H0002
+        IMAGE_SYM_CLASS_STATIC = &H0003
+        IMAGE_SYM_CLASS_REGISTER = &H0004
+        IMAGE_SYM_CLASS_EXTERNAL_DEF = &H0005
+        IMAGE_SYM_CLASS_LABEL = &H0006
+        IMAGE_SYM_CLASS_UNDEFINED_LABEL = &H0007
+        IMAGE_SYM_CLASS_MEMBER_OF_STRUCT = &H0008
+        IMAGE_SYM_CLASS_ARGUMENT = &H0009
+        IMAGE_SYM_CLASS_STRUCT_TAG = &H000A
+        IMAGE_SYM_CLASS_MEMBER_OF_UNION = &H000B
+        IMAGE_SYM_CLASS_UNION_TAG = &H000C
+        IMAGE_SYM_CLASS_TYPE_DEFINITION = &H000D
+        IMAGE_SYM_CLASS_UNDEFINED_STATIC = &H000E
+        IMAGE_SYM_CLASS_ENUM_TAG = &H000F
+        IMAGE_SYM_CLASS_MEMBER_OF_ENUM = &H0010
+        IMAGE_SYM_CLASS_REGISTER_PARAM = &H0011
+        IMAGE_SYM_CLASS_BIT_FIELD = &H0012
+        IMAGE_SYM_CLASS_FAR_EXTERNAL = &H0044  '
+        IMAGE_SYM_CLASS_BLOCK = &H0064
+        IMAGE_SYM_CLASS_FUNCTION = &H0065
+        IMAGE_SYM_CLASS_END_OF_STRUCT = &H0066
+        IMAGE_SYM_CLASS_FILE = &H0067
+    '  new
+        IMAGE_SYM_CLASS_SECTION = &H0068
+        IMAGE_SYM_CLASS_WEAK_EXTERNAL = &H0069
+        IMAGE_SYM_CLASS_CLR_TOKEN = &H006B
+    End Enum
+
+    Public Const N_BTMASK  = &H000F
+    Public Const N_TMASK  = &H0030
+    Public Const N_TMASK1  = &H00C0
+    Public Const N_TMASK2  = &H00F0
+    Public Const N_BTSHFT  = 4
+    Public Const N_TSHIFT  = 2
+
+
+    Public Const IMAGE_SIZEOF_SYMBOL  = 18
+
+    [PackingAlignment(2)]
+    Public Type IMAGE_SYMBOL
+        ' union {
+            ' BYTE    ShortName[8];
+            ' struct {
+                ' DWORD   Short;     // if 0, use LongName
+                ' DWORD   Long;      // offset into string table
+            ' } Name;
+            ' DWORD   LongName[2];    // PBYTE [2]
+        ' } N;
+        N(7) As Byte
+        Value As Long
+        SectionNumber As Integer
+        /* [ TypeHint(IMAGE_SYM_TYPE_DERIVED) ] */ Type As Integer
+        /* [ TypeHint(IMAGE_STORAGE_CLASS) ] */ StorageClass As Byte
+        NumberOfAuxSymbols As Byte
+    End Type
+    [PackingAlignment(2)]
+    Public Type IMAGE_SYMBOL_EX
+        ' union {
+            ' BYTE    ShortName[8];
+            ' struct {
+                ' DWORD   Short;     // if 0, use LongName
+                ' DWORD   Long;      // offset into string table
+            ' } Name;
+            ' DWORD   LongName[2];    // PBYTE [2]
+        ' } N;
+        N(7) As Byte
+        Value As Long
+        SectionNumber As Long
+        /* [ TypeHint(IMAGE_SYM_TYPE_DERIVED) ] */ Type As Integer
+        /* [ TypeHint(IMAGE_STORAGE_CLASS) ] */ StorageClass As Byte
+        NumberOfAuxSymbols As Byte
+    End Type
+
+    [PackingAlignment(2)]
+    Public Type IMAGE_AUX_SYMBOL_TOKEN_DEF
+        bAuxType As Byte ' IMAGE_AUX_SYMBOL_TYPE
+        bReserved As Byte ' Must be 0
+        SymbolTableIndex As Long
+        rgbReserved(0 To 11) As Byte ' Must be 0
+    End Type
+
+    [PackingAlignment(2)]
+    Public Type IMAGE_AUX_SYMBOL
+        Sym_TagIndex As Long
+        Sym_Misc As Long
+        Sym_FcnAry(7) As Byte
+        Sym_TvIndex As Long
+        File_Name(0 To (IMAGE_SIZEOF_SYMBOL - 1)) As Byte
+        Section_Length As Long ' section length
+        Section_NumberOfRelocations As Integer ' number of relocation entries
+        Section_NumberOfLinenumbers As Integer ' number of line numbers
+        Section_CheckSum As Long ' checksum for communal
+        Section_Number As Integer ' section number to associate with
+        Section_Selection As Byte ' communal selection type
+        Section_bReserved As Byte
+        Section_HighNumber As Integer ' high bits of the section number
+        TokenDef As IMAGE_AUX_SYMBOL_TOKEN_DEF
+        CRC_crc As Long
+        CRC_rgbReserved(13) As Byte
+    End Type
+    [PackingAlignment(2)]
+    Public Type IMAGE_AUX_SYMBOL_EX
+        Sym_WeakDefaultSymIndex As Long
+        Sym_WeakSearchType As Long
+        Sym_rgbReserved(11) As Byte
+        File_Name(0 To (IMAGE_SIZEOF_SYMBOL - 1)) As Byte
+        Section_Length As Long ' section length
+        Section_NumberOfRelocations As Integer ' number of relocation entries
+        Section_NumberOfLinenumbers As Integer ' number of line numbers
+        Section_CheckSum As Long ' checksum for communal
+        Section_Number As Integer ' section number to associate with
+        Section_Selection As Byte ' communal selection type
+        Section_rgbReserved(1) As Byte
+        Section_HighNumber As Integer ' high bits of the section number
+        TokenDef As IMAGE_AUX_SYMBOL_TOKEN_DEF
+        rgbReserved(1) As Byte
+        CRC_crc As Long
+        CRC_rgbReserved(15) As Byte
+    End Type
+
+    Public Enum IMAGE_AUX_SYMBOL_TYPE
+        IMAGE_AUX_SYMBOL_TYPE_TOKEN_DEF = 1
+    End Enum
+
+    Public Enum IMAGE_COMMUNAL_SELTYPE
+        IMAGE_COMDAT_SELECT_NODUPLICATES = 1
+        IMAGE_COMDAT_SELECT_ANY = 2
+        IMAGE_COMDAT_SELECT_SAME_SIZE = 3
+        IMAGE_COMDAT_SELECT_EXACT_MATCH = 4
+        IMAGE_COMDAT_SELECT_ASSOCIATIVE = 5
+        IMAGE_COMDAT_SELECT_LARGEST = 6
+        IMAGE_COMDAT_SELECT_NEWEST = 7
+    End Enum
+
+    Public Enum IMAGE_WEAK_EXTERN
+        IMAGE_WEAK_EXTERN_SEARCH_NOLIBRARY = 1
+        IMAGE_WEAK_EXTERN_SEARCH_LIBRARY = 2
+        IMAGE_WEAK_EXTERN_SEARCH_ALIAS = 3
+        IMAGE_WEAK_EXTERN_ANTI_DEPENDENCY = 4
+    End Enum
+
+    Public Enum IMAGE_RELOC_TYPE_I386
+        IMAGE_REL_I386_ABSOLUTE = &H0000  ' Reference is absolute, no relocation is necessary
+        IMAGE_REL_I386_DIR16 = &H0001  ' Direct 16-bit reference to the symbols virtual address
+        IMAGE_REL_I386_REL16 = &H0002  ' PC-relative 16-bit reference to the symbols virtual address
+        IMAGE_REL_I386_DIR32 = &H0006  ' Direct 32-bit reference to the symbols virtual address
+        IMAGE_REL_I386_DIR32NB = &H0007  ' Direct 32-bit reference to the symbols virtual address, base not included
+        IMAGE_REL_I386_SEG12 = &H0009  ' Direct 16-bit reference to the segment-selector bits of a 32-bit virtual address
+        IMAGE_REL_I386_SECTION = &H000A
+        IMAGE_REL_I386_SECREL = &H000B
+        IMAGE_REL_I386_TOKEN = &H000C  ' clr token
+        IMAGE_REL_I386_SECREL7 = &H000D  ' 7 bit offset from base of section containing target
+        IMAGE_REL_I386_REL32 = &H0014  ' PC-relative 32-bit reference to the symbols virtual address
+    End Enum
+    Public Enum IMAGE_RELOC_TYPE_MIPS
+        IMAGE_REL_MIPS_ABSOLUTE = &H0000  ' Reference is absolute, no relocation is necessary
+        IMAGE_REL_MIPS_REFHALF = &H0001
+        IMAGE_REL_MIPS_REFWORD = &H0002
+        IMAGE_REL_MIPS_JMPADDR = &H0003
+        IMAGE_REL_MIPS_REFHI = &H0004
+        IMAGE_REL_MIPS_REFLO = &H0005
+        IMAGE_REL_MIPS_GPREL = &H0006
+        IMAGE_REL_MIPS_LITERAL = &H0007
+        IMAGE_REL_MIPS_SECTION = &H000A
+        IMAGE_REL_MIPS_SECREL = &H000B
+        IMAGE_REL_MIPS_SECRELLO = &H000C  ' Low 16-bit section relative referemce (used for >32k TLS)
+        IMAGE_REL_MIPS_SECRELHI = &H000D  ' High 16-bit section relative reference (used for >32k TLS)
+        IMAGE_REL_MIPS_TOKEN = &H000E  ' clr token
+        IMAGE_REL_MIPS_JMPADDR16 = &H0010
+        IMAGE_REL_MIPS_REFWORDNB = &H0022
+        IMAGE_REL_MIPS_PAIR = &H0025
+    End Enum
+    Public Enum IMAGE_RELOC_TYPE_PPC
+        IMAGE_REL_PPC_ABSOLUTE = &H0000  ' NOP
+        IMAGE_REL_PPC_ADDR64 = &H0001  ' 64-bit address
+        IMAGE_REL_PPC_ADDR32 = &H0002  ' 32-bit address
+        IMAGE_REL_PPC_ADDR24 = &H0003  ' 26-bit address, shifted left 2 (branch absolute)
+        IMAGE_REL_PPC_ADDR16 = &H0004  ' 16-bit address
+        IMAGE_REL_PPC_ADDR14 = &H0005  ' 16-bit address, shifted left 2 (load doubleword)
+        IMAGE_REL_PPC_REL24 = &H0006  ' 26-bit PC-relative offset, shifted left 2 (branch relative)
+        IMAGE_REL_PPC_REL14 = &H0007  ' 16-bit PC-relative offset, shifted left 2 (br cond relative)
+        IMAGE_REL_PPC_TOCREL16 = &H0008  ' 16-bit offset from TOC base
+        IMAGE_REL_PPC_TOCREL14 = &H0009  ' 16-bit offset from TOC base, shifted left 2 (load doubleword)
+        IMAGE_REL_PPC_ADDR32NB = &H000A  ' 32-bit addr w/o image base
+        IMAGE_REL_PPC_SECREL = &H000B  ' va of containing section (as in an image sectionhdr)
+        IMAGE_REL_PPC_SECTION = &H000C  ' sectionheader number
+        IMAGE_REL_PPC_IFGLUE = &H000D  ' substitute TOC restore instruction iff symbol is glue code
+        IMAGE_REL_PPC_IMGLUE = &H000E  ' symbol is glue code; virtual address is TOC restore instruction
+        IMAGE_REL_PPC_SECREL16 = &H000F  ' va of containing section (limited to 16 bits)
+        IMAGE_REL_PPC_REFHI = &H0010
+        IMAGE_REL_PPC_REFLO = &H0011
+        IMAGE_REL_PPC_PAIR = &H0012
+        IMAGE_REL_PPC_SECRELLO = &H0013  ' Low 16-bit section relative reference (used for >32k TLS)
+        IMAGE_REL_PPC_SECRELHI = &H0014  ' High 16-bit section relative reference (used for >32k TLS)
+        IMAGE_REL_PPC_GPREL = &H0015
+        IMAGE_REL_PPC_TOKEN = &H0016  ' clr token
+        IMAGE_REL_PPC_TYPEMASK = &H00FF  ' mask to isolate above values in IMAGE_RELOCATION.Type
+    '  Flag bits in IMAGE_RELOCATION.TYPE
+        IMAGE_REL_PPC_NEG = &H0100  ' subtract reloc value rather than adding it
+        IMAGE_REL_PPC_BRTAKEN = &H0200  ' fix branch prediction bit to predict branch taken
+        IMAGE_REL_PPC_BRNTAKEN = &H0400  ' fix branch prediction bit to predict branch not taken
+        IMAGE_REL_PPC_TOCDEFN = &H0800  ' toc slot defined in file (or, data in toc)
+    End Enum
+    Public Enum IMAGE_RELOC_TYPE_SH3
+        IMAGE_REL_SH3_ABSOLUTE = &H0000  ' No relocation
+        IMAGE_REL_SH3_DIRECT16 = &H0001  ' 16 bit direct
+        IMAGE_REL_SH3_DIRECT32 = &H0002  ' 32 bit direct
+        IMAGE_REL_SH3_DIRECT8 = &H0003  ' 8 bit direct, -128..255
+        IMAGE_REL_SH3_DIRECT8_WORD = &H0004  ' 8 bit direct .W (0 ext.)
+        IMAGE_REL_SH3_DIRECT8_LONG = &H0005  ' 8 bit direct .L (0 ext.)
+        IMAGE_REL_SH3_DIRECT4 = &H0006  ' 4 bit direct (0 ext.)
+        IMAGE_REL_SH3_DIRECT4_WORD = &H0007  ' 4 bit direct .W (0 ext.)
+        IMAGE_REL_SH3_DIRECT4_LONG = &H0008  ' 4 bit direct .L (0 ext.)
+        IMAGE_REL_SH3_PCREL8_WORD = &H0009  ' 8 bit PC relative .W
+        IMAGE_REL_SH3_PCREL8_LONG = &H000A  ' 8 bit PC relative .L
+        IMAGE_REL_SH3_PCREL12_WORD = &H000B  ' 12 LSB PC relative .W
+        IMAGE_REL_SH3_STARTOF_SECTION = &H000C  ' Start of EXE section
+        IMAGE_REL_SH3_SIZEOF_SECTION = &H000D  ' Size of EXE section
+        IMAGE_REL_SH3_SECTION = &H000E  ' Section table index
+        IMAGE_REL_SH3_SECREL = &H000F  ' Offset within section
+        IMAGE_REL_SH3_DIRECT32_NB = &H0010  ' 32 bit direct not based
+        IMAGE_REL_SH3_GPREL4_LONG = &H0011  ' GP-relative addressing
+        IMAGE_REL_SH3_TOKEN = &H0012  ' clr token
+        IMAGE_REL_SHM_PCRELPT = &H0013  ' Offset from current
+                                        '   instruction in longwords
+                                        '   if not NOMODE, insert the
+                                        '   inverse of the low bit at
+                                        '   bit 32 to select PTA/PTB
+        IMAGE_REL_SHM_REFLO = &H0014  ' Low bits of 32-bit address
+        IMAGE_REL_SHM_REFHALF = &H0015  ' High bits of 32-bit address
+        IMAGE_REL_SHM_RELLO = &H0016  ' Low bits of relative reference
+        IMAGE_REL_SHM_RELHALF = &H0017  ' High bits of relative reference
+        IMAGE_REL_SHM_PAIR = &H0018  ' offset operand for relocation
+        IMAGE_REL_SH_NOMODE = &H8000&  ' relocation ignores section mode
+    End Enum
+    Public Enum IMAGE_RELOC_TYPE_ARM
+        IMAGE_REL_ARM_ABSOLUTE = &H0000  ' No relocation required
+        IMAGE_REL_ARM_ADDR32 = &H0001  ' 32 bit address
+        IMAGE_REL_ARM_ADDR32NB = &H0002  ' 32 bit address w/o image base
+        IMAGE_REL_ARM_BRANCH24 = &H0003  ' 24 bit offset << 2 & sign ext.
+        IMAGE_REL_ARM_BRANCH11 = &H0004  ' Thumb: 2 11 bit offsets
+        IMAGE_REL_ARM_TOKEN = &H0005  ' clr token
+        IMAGE_REL_ARM_GPREL12 = &H0006  ' GP-relative addressing (ARM)
+        IMAGE_REL_ARM_GPREL7 = &H0007  ' GP-relative addressing (Thumb)
+        IMAGE_REL_ARM_BLX24 = &H0008
+        IMAGE_REL_ARM_BLX11 = &H0009
+        IMAGE_REL_ARM_SECTION = &H000E  ' Section table index
+        IMAGE_REL_ARM_SECREL = &H000F  ' Offset within section
+        IMAGE_REL_ARM_MOV32A = &H0010  ' ARM: MOVW/MOVT
+        IMAGE_REL_ARM_MOV32 = &H0010  ' ARM: MOVW/MOVT (deprecated)
+        IMAGE_REL_ARM_MOV32T = &H0011  ' Thumb: MOVW/MOVT
+        IMAGE_REL_THUMB_MOV32 = &H0011  ' Thumb: MOVW/MOVT (deprecated)
+        IMAGE_REL_ARM_BRANCH20T = &H0012  ' Thumb: 32-bit conditional B
+        IMAGE_REL_THUMB_BRANCH20 = &H0012  ' Thumb: 32-bit conditional B (deprecated)
+        IMAGE_REL_ARM_BRANCH24T = &H0014  ' Thumb: 32-bit B or BL
+        IMAGE_REL_THUMB_BRANCH24 = &H0014  ' Thumb: 32-bit B or BL (deprecated)
+        IMAGE_REL_ARM_BLX23T = &H0015  ' Thumb: BLX immediate
+        IMAGE_REL_THUMB_BLX23 = &H0015  ' Thumb: BLX immediate (deprecated)
+        IMAGE_REL_AM_ABSOLUTE = &H0000
+        IMAGE_REL_AM_ADDR32 = &H0001
+        IMAGE_REL_AM_ADDR32NB = &H0002
+        IMAGE_REL_AM_CALL32 = &H0003
+        IMAGE_REL_AM_FUNCINFO = &H0004
+        IMAGE_REL_AM_REL32_1 = &H0005
+        IMAGE_REL_AM_REL32_2 = &H0006
+        IMAGE_REL_AM_SECREL = &H0007
+        IMAGE_REL_AM_SECTION = &H0008
+        IMAGE_REL_AM_TOKEN = &H0009
+    End Enum
+    Public Enum IMAGE_RELOC_TYPE_ARM64
+        IMAGE_REL_ARM64_ABSOLUTE = &H0000  ' No relocation required
+        IMAGE_REL_ARM64_ADDR32 = &H0001  ' 32 bit address. Review! do we need it?
+        IMAGE_REL_ARM64_ADDR32NB = &H0002  ' 32 bit address w/o image base (RVA: for Data/PData/XData)
+        IMAGE_REL_ARM64_BRANCH26 = &H0003  ' 26 bit offset << 2 & sign ext. for B & BL
+        IMAGE_REL_ARM64_PAGEBASE_REL21 = &H0004  ' ADRP
+        IMAGE_REL_ARM64_REL21 = &H0005  ' ADR
+        IMAGE_REL_ARM64_PAGEOFFSET_12A = &H0006  ' ADD/ADDS (immediate) with zero shift, for page offset
+        IMAGE_REL_ARM64_PAGEOFFSET_12L = &H0007  ' LDR (indexed, unsigned immediate), for page offset
+        IMAGE_REL_ARM64_SECREL = &H0008  ' Offset within section
+        IMAGE_REL_ARM64_SECREL_LOW12A = &H0009  ' ADD/ADDS (immediate) with zero shift, for bit 0:11 of section offset
+        IMAGE_REL_ARM64_SECREL_HIGH12A = &H000A  ' ADD/ADDS (immediate) with zero shift, for bit 12:23 of section offset
+        IMAGE_REL_ARM64_SECREL_LOW12L = &H000B  ' LDR (indexed, unsigned immediate), for bit 0:11 of section offset
+        IMAGE_REL_ARM64_TOKEN = &H000C
+        IMAGE_REL_ARM64_SECTION = &H000D  ' Section table index
+        IMAGE_REL_ARM64_ADDR64 = &H000E  ' 64 bit address
+        IMAGE_REL_ARM64_BRANCH19 = &H000F  ' 19 bit offset << 2 & sign ext. for conditional B
+    End Enum
+    Public Enum IMAGE_RELOC_TYPE_AMD64
+        IMAGE_REL_AMD64_ABSOLUTE = &H0000  ' Reference is absolute, no relocation is necessary
+        IMAGE_REL_AMD64_ADDR64 = &H0001  ' 64-bit address (VA).
+        IMAGE_REL_AMD64_ADDR32 = &H0002  ' 32-bit address (VA).
+        IMAGE_REL_AMD64_ADDR32NB = &H0003  ' 32-bit address w/o image base (RVA).
+        IMAGE_REL_AMD64_REL32 = &H0004  ' 32-bit relative address from byte following reloc
+        IMAGE_REL_AMD64_REL32_1 = &H0005  ' 32-bit relative address from byte distance 1 from reloc
+        IMAGE_REL_AMD64_REL32_2 = &H0006  ' 32-bit relative address from byte distance 2 from reloc
+        IMAGE_REL_AMD64_REL32_3 = &H0007  ' 32-bit relative address from byte distance 3 from reloc
+        IMAGE_REL_AMD64_REL32_4 = &H0008  ' 32-bit relative address from byte distance 4 from reloc
+        IMAGE_REL_AMD64_REL32_5 = &H0009  ' 32-bit relative address from byte distance 5 from reloc
+        IMAGE_REL_AMD64_SECTION = &H000A  ' Section index
+        IMAGE_REL_AMD64_SECREL = &H000B  ' 32 bit offset from base of section containing target
+        IMAGE_REL_AMD64_SECREL7 = &H000C  ' 7 bit unsigned offset from base of section containing target
+        IMAGE_REL_AMD64_TOKEN = &H000D  ' 32 bit metadata token
+        IMAGE_REL_AMD64_SREL32 = &H000E  ' 32 bit signed span-dependent value emitted into object
+        IMAGE_REL_AMD64_PAIR = &H000F
+        IMAGE_REL_AMD64_SSPAN32 = &H0010  ' 32 bit signed span-dependent value applied at link time
+        IMAGE_REL_AMD64_EHANDLER = &H0011
+        IMAGE_REL_AMD64_IMPORT_BR = &H0012  ' Indirect branch to an import
+        IMAGE_REL_AMD64_IMPORT_CALL = &H0013  ' Indirect call to an import
+        IMAGE_REL_AMD64_CFG_BR = &H0014  ' Indirect branch to a CFG check
+        IMAGE_REL_AMD64_CFG_BR_REX = &H0015  ' Indirect branch to a CFG check, with REX.W prefix
+        IMAGE_REL_AMD64_CFG_CALL = &H0016  ' Indirect call to a CFG check
+        IMAGE_REL_AMD64_INDIR_BR = &H0017  ' Indirect branch to a target in RAX (no CFG)
+        IMAGE_REL_AMD64_INDIR_BR_REX = &H0018  ' Indirect branch to a target in RAX, with REX.W prefix (no CFG)
+        IMAGE_REL_AMD64_INDIR_CALL = &H0019  ' Indirect call to a target in RAX (no CFG)
+        IMAGE_REL_AMD64_INDIR_BR_SWITCHTABLE_FIRST = &H0020  ' Indirect branch for a switch table using Reg 0 (RAX)
+        IMAGE_REL_AMD64_INDIR_BR_SWITCHTABLE_LAST = &H002F  ' Indirect branch for a switch table using Reg 15 (R15)
+    End Enum
+    Public Enum IMAGE_RELOC_TYPE_IA64
+        IMAGE_REL_IA64_ABSOLUTE = &H0000
+        IMAGE_REL_IA64_IMM14 = &H0001
+        IMAGE_REL_IA64_IMM22 = &H0002
+        IMAGE_REL_IA64_IMM64 = &H0003
+        IMAGE_REL_IA64_DIR32 = &H0004
+        IMAGE_REL_IA64_DIR64 = &H0005
+        IMAGE_REL_IA64_PCREL21B = &H0006
+        IMAGE_REL_IA64_PCREL21M = &H0007
+        IMAGE_REL_IA64_PCREL21F = &H0008
+        IMAGE_REL_IA64_GPREL22 = &H0009
+        IMAGE_REL_IA64_LTOFF22 = &H000A
+        IMAGE_REL_IA64_SECTION = &H000B
+        IMAGE_REL_IA64_SECREL22 = &H000C
+        IMAGE_REL_IA64_SECREL64I = &H000D
+        IMAGE_REL_IA64_SECREL32 = &H000E
+        IMAGE_REL_IA64_DIR32NB = &H0010
+        IMAGE_REL_IA64_SREL14 = &H0011
+        IMAGE_REL_IA64_SREL22 = &H0012
+        IMAGE_REL_IA64_SREL32 = &H0013
+        IMAGE_REL_IA64_UREL32 = &H0014
+        IMAGE_REL_IA64_PCREL60X = &H0015  ' This is always a BRL and never converted
+        IMAGE_REL_IA64_PCREL60B = &H0016  ' If possible, convert to MBB bundle with NOP.B in slot 1
+        IMAGE_REL_IA64_PCREL60F = &H0017  ' If possible, convert to MFB bundle with NOP.F in slot 1
+        IMAGE_REL_IA64_PCREL60I = &H0018  ' If possible, convert to MIB bundle with NOP.I in slot 1
+        IMAGE_REL_IA64_PCREL60M = &H0019  ' If possible, convert to MMB bundle with NOP.M in slot 1
+        IMAGE_REL_IA64_IMMGPREL64 = &H001A
+        IMAGE_REL_IA64_TOKEN = &H001B  ' clr token
+        IMAGE_REL_IA64_GPREL32 = &H001C
+        IMAGE_REL_IA64_ADDEND = &H001F
+    End Enum
+    Public Enum IMAGE_RELOC_TYPE_CEF
+        IMAGE_REL_CEF_ABSOLUTE = &H0000  ' Reference is absolute, no relocation is necessary
+        IMAGE_REL_CEF_ADDR32 = &H0001  ' 32-bit address (VA).
+        IMAGE_REL_CEF_ADDR64 = &H0002  ' 64-bit address (VA).
+        IMAGE_REL_CEF_ADDR32NB = &H0003  ' 32-bit address w/o image base (RVA).
+        IMAGE_REL_CEF_SECTION = &H0004  ' Section index
+        IMAGE_REL_CEF_SECREL = &H0005  ' 32 bit offset from base of section containing target
+        IMAGE_REL_CEF_TOKEN = &H0006  ' 32 bit metadata token
+    End Enum
+    Public Enum IMAGE_RELOC_TYPE_CEE
+        IMAGE_REL_CEE_ABSOLUTE = &H0000  ' Reference is absolute, no relocation is necessary
+        IMAGE_REL_CEE_ADDR32 = &H0001  ' 32-bit address (VA).
+        IMAGE_REL_CEE_ADDR64 = &H0002  ' 64-bit address (VA).
+        IMAGE_REL_CEE_ADDR32NB = &H0003  ' 32-bit address w/o image base (RVA).
+        IMAGE_REL_CEE_SECTION = &H0004  ' Section index
+        IMAGE_REL_CEE_SECREL = &H0005  ' 32 bit offset from base of section containing target
+        IMAGE_REL_CEE_TOKEN = &H0006  ' 32 bit metadata token
+    End Enum
+    Public Enum IMAGE_RELOC_TYPE_M32R
+        IMAGE_REL_M32R_ABSOLUTE = &H0000  ' No relocation required
+        IMAGE_REL_M32R_ADDR32 = &H0001  ' 32 bit address
+        IMAGE_REL_M32R_ADDR32NB = &H0002  ' 32 bit address w/o image base
+        IMAGE_REL_M32R_ADDR24 = &H0003  ' 24 bit address
+        IMAGE_REL_M32R_GPREL16 = &H0004  ' GP relative addressing
+        IMAGE_REL_M32R_PCREL24 = &H0005  ' 24 bit offset << 2 & sign ext.
+        IMAGE_REL_M32R_PCREL16 = &H0006  ' 16 bit offset << 2 & sign ext.
+        IMAGE_REL_M32R_PCREL8 = &H0007  ' 8 bit offset << 2 & sign ext.
+        IMAGE_REL_M32R_REFHALF = &H0008  ' 16 MSBs
+        IMAGE_REL_M32R_REFHI = &H0009  ' 16 MSBs; adj for LSB sign ext.
+        IMAGE_REL_M32R_REFLO = &H000A  ' 16 LSBs
+        IMAGE_REL_M32R_PAIR = &H000B  ' Link HI and LO
+        IMAGE_REL_M32R_SECTION = &H000C  ' Section table index
+        IMAGE_REL_M32R_SECREL32 = &H000D  ' 32 bit section relative reference
+        IMAGE_REL_M32R_TOKEN = &H000E  ' clr token
+    End Enum
+    Public Enum IMAGE_RELOC_TYPE_EBC
+        IMAGE_REL_EBC_ABSOLUTE = &H0000  ' No relocation required
+        IMAGE_REL_EBC_ADDR32NB = &H0001  ' 32 bit address w/o image base
+        IMAGE_REL_EBC_REL32 = &H0002  ' 32-bit relative address from byte following reloc
+        IMAGE_REL_EBC_SECTION = &H0003  ' Section table index
+        IMAGE_REL_EBC_SECREL = &H0004  ' Offset within section
+    End Enum
+
+    Public Type IMAGE_RUNTIME_FUNCTION_ENTRY
+        BeginAddress As Long
+        EndAddress As Long
+        UnwindInfoAddress As Long
+    End Type
+    'Alias RUNTIME_FUNCTION As IMAGE_RUNTIME_FUNCTION_ENTRY
+    Public Type RUNTIME_FUNCTION
+        BeginAddress As Long
+        EndAddress As Long
+        UnwindInfoAddress As Long
+    End Type
+
+    Public Type UNWIND_HISTORY_TABLE_ENTRY
+        ImageBase As LongPtr
+        FunctionEntry As LongPtr 'PRUNTIME_FUNCTION
+    End Type
+
+    Public Type IMAGE_DYNAMIC_RELOCATION_TABLE
+        Version As Long
+        Size As Long
+        '  IMAGE_DYNAMIC_RELOCATION DynamicRelocations[0];
+    End Type
+    Public Const UNWIND_HISTORY_TABLE_SIZE = 32
+    
+    Public Type UNWIND_HISTORY_TABLE
+        Count As Long
+        LocalHint As Byte
+        GlobalHint As Byte
+        Search As Byte
+        Once As Byte
+        LowAddress As LongPtr
+        HighAddress As LongPtr
+        Entry(0 To (UNWIND_HISTORY_TABLE_SIZE - 1)) As UNWIND_HISTORY_TABLE_ENTRY
+    End Type
+
+    [PackingAlignment(1)]
+    Public Type IMAGE_DYNAMIC_RELOCATION32
+        Symbol As Long
+        BaseRelocSize As Long
+        '  IMAGE_BASE_RELOCATION BaseRelocations[0];
+    End Type
+    [PackingAlignment(1)]
+    Public Type IMAGE_DYNAMIC_RELOCATION64
+        Symbol As LongLong
+        BaseRelocSize As Long
+        '  IMAGE_BASE_RELOCATION BaseRelocations[0];
+    End Type
+    #If Win64 Then
+        'Alias IMAGE_DYNAMIC_RELOCATION As IMAGE_DYNAMIC_RELOCATION64
+        [PackingAlignment(1)]
+        Public Type IMAGE_DYNAMIC_RELOCATION
+            Symbol As LongLong
+            BaseRelocSize As Long
+            '  IMAGE_BASE_RELOCATION BaseRelocations[0];
+        End Type
+    #Else
+        'Alias IMAGE_DYNAMIC_RELOCATION As IMAGE_DYNAMIC_RELOCATION32
+        [PackingAlignment(1)]
+        Public Type IMAGE_DYNAMIC_RELOCATION
+            Symbol As Long
+            BaseRelocSize As Long
+            '  IMAGE_BASE_RELOCATION BaseRelocations[0];
+        End Type
+    #End If
+
+    [PackingAlignment(1)]
+    Public Type IMAGE_DYNAMIC_RELOCATION32_V2
+        HeaderSize As Long
+        FixupInfoSize As Long
+        Symbol As Long
+        SymbolGroup As Long
+        Flags As Long
+        ' ...     variable length header fields
+        ' BYTE    FixupInfo[FixupInfoSize]
+    End Type
+    [PackingAlignment(1)]
+    Public Type IMAGE_DYNAMIC_RELOCATION64_V2
+        HeaderSize As Long
+        FixupInfoSize As Long
+        Symbol As LongLong
+        SymbolGroup As Long
+        Flags As Long
+        ' ...     variable length header fields
+        ' BYTE    FixupInfo[FixupInfoSize]
+    End Type
+
+    #If Win64 Then
+    [PackingAlignment(1)]
+    Public Type IMAGE_DYNAMIC_RELOCATION_V2
+        HeaderSize As Long
+        FixupInfoSize As Long
+        Symbol As LongLong
+        SymbolGroup As Long
+        Flags As Long
+        ' ...     variable length header fields
+        ' BYTE    FixupInfo[FixupInfoSize]
+    End Type
+    #Else
+    [PackingAlignment(1)]
+    Public Type IMAGE_DYNAMIC_RELOCATION_V2
+        HeaderSize As Long
+        FixupInfoSize As Long
+        Symbol As Long
+        SymbolGroup As Long
+        Flags As Long
+        ' ...     variable length header fields
+        ' BYTE    FixupInfo[FixupInfoSize]
+    End Type
+    #End If
+
+
+    [PackingAlignment(2)]
+    Public Type IMAGE_RELOCATION
+        ' union {
+            ' DWORD   VirtualAddress;
+            ' DWORD   RelocCount;             // Set to the real count when IMAGE_SCN_LNK_NRELOC_OVFL is set
+        ' } DUMMYUNIONNAME;
+        VirtAddrOrRelocCt As Long
+        SymbolTableIndex As Long
+        nType As Integer
+    End Type
+
+    [PackingAlignment(2)]
+    Public Type IMAGE_LINENUMBER
+        '    union {
+        '        DWORD   SymbolTableIndex;               // Symbol table index of function name if Linenumber is 0.
+        '        DWORD   VirtualAddress;                 // Virtual address of line number.
+        '   } Type;
+        nType As Long
+        Linenumber As Integer ' Line number.
+    End Type
+
+
+    Public Type IMAGE_LOAD_CONFIG_CODE_INTEGRITY
+        Flags As Integer ' Flags to indicate if CI information is available, etc.
+        Catalog As Integer ' 0xFFFF means not available
+        CatalogOffset As Long
+        Reserved As Long ' Additional bitmask to be defined later
+    End Type
+    Public Enum ImageLoadConfigGuardFlags
+        IMAGE_GUARD_CF_INSTRUMENTED = &H00000100  ' Module performs control flow integrity checks using system-supplied support
+        IMAGE_GUARD_CFW_INSTRUMENTED = &H00000200  ' Module performs control flow and write integrity checks
+        IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT = &H00000400  ' Module contains valid control flow target metadata
+        IMAGE_GUARD_SECURITY_COOKIE_UNUSED = &H00000800  ' Module does not make use of the /GS security cookie
+        IMAGE_GUARD_PROTECT_DELAYLOAD_IAT = &H00001000  ' Module supports read only delay load IAT
+        IMAGE_GUARD_DELAYLOAD_IAT_IN_ITS_OWN_SECTION = &H00002000  ' Delayload import table in its own .didat section (with nothing else in it) that can be freely reprotected
+        IMAGE_GUARD_CF_EXPORT_SUPPRESSION_INFO_PRESENT = &H00004000  ' Module contains suppressed export information. This also infers that the address taken
+    '  taken IAT table is also present in the load config.
+        IMAGE_GUARD_CF_ENABLE_EXPORT_SUPPRESSION = &H00008000&  ' Module enables suppression of exports
+        IMAGE_GUARD_CF_LONGJUMP_TABLE_PRESENT = &H00010000  ' Module contains longjmp target information
+        IMAGE_GUARD_RF_INSTRUMENTED = &H00020000  ' Module contains return flow instrumentation and metadata
+        IMAGE_GUARD_RF_ENABLE = &H00040000  ' Module requests that the OS enable return flow protection
+        IMAGE_GUARD_RF_STRICT = &H00080000  ' Module requests that the OS enable return flow protection in strict mode
+        IMAGE_GUARD_RETPOLINE_PRESENT = &H00100000  ' Module was built with retpoline support
+    '  DO_NOT_USE                                          0x00200000 // Was EHCont flag on VB (20H1)
+        IMAGE_GUARD_EH_CONTINUATION_TABLE_PRESENT = &H00400000  ' Module contains EH continuation target information
+        IMAGE_GUARD_XFG_ENABLED = &H00800000  ' Module was built with xfg
+        IMAGE_GUARD_CASTGUARD_PRESENT = &H01000000  ' Module has CastGuard instrumentation present
+        IMAGE_GUARD_MEMCPY_PRESENT = &H02000000  ' Module has Guarded Memcpy instrumentation present
+        IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_MASK = &HF0000000  ' Stride of Guard CF function table encoded in these bits (additional count of bytes per element)
+        IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_SHIFT = 28  ' Shift to right-justify Guard CF function table stride
+    End Enum
+    [Description("⚠️ **WARNING:** CHECK SIZE BEFORE COPYING: This UDT has members appended in most Windows versions. Only copy the available size.")]
+    Public Type IMAGE_LOAD_CONFIG_DIRECTORY64
+        Size As Long
+        TimeDateStamp As Long
+        MajorVersion As Integer
+        MinorVersion As Integer
+        GlobalFlagsClear As Long
+        GlobalFlagsSet As Long
+        CriticalSectionDefaultTimeout As Long
+        DeCommitFreeBlockThreshold As LongLong
+        DeCommitTotalFreeThreshold As LongLong
+        LockPrefixTable As LongLong ' VA
+        MaximumAllocationSize As LongLong
+        VirtualMemoryThreshold As LongLong
+        ProcessAffinityMask As LongLong
+        ProcessHeapFlags As Long
+        CSDVersion As Integer
+        DependentLoadFlags As Integer
+        EditList As LongLong ' VA
+        SecurityCookie As LongLong ' VA
+        SEHandlerTable As LongLong ' VA
+        SEHandlerCount As LongLong
+        'Fields available in v8.1+ of the Windows SDK.
+        GuardCFCheckFunctionPointer As LongLong ' VA
+        GuardCFDispatchFunctionPointer As LongLong ' VA
+        GuardCFFunctionTable As LongLong ' VA
+        GuardCFFunctionCount As LongLong
+        GuardFlags As ImageLoadConfigGuardFlags
+        'Fields available in v10.0.10586.0+ of the Windows SDK.
+        CodeIntegrity As IMAGE_LOAD_CONFIG_CODE_INTEGRITY
+        GuardAddressTakenIatEntryTable As LongLong ' VA
+        GuardAddressTakenIatEntryCount As LongLong
+        GuardLongJumpTargetTable As LongLong ' VA
+        GuardLongJumpTargetCount As LongLong
+        DynamicValueRelocTable As LongLong ' VA
+        CHPEMetadataPointer As LongLong ' VA
+        'Fields available in the v10.0.15063.468+ of the SDK.
+        GuardRFFailureRoutine As LongLong ' VA
+        GuardRFFailureRoutineFunctionPointer As LongLong ' VA
+        DynamicValueRelocTableOffset As Long
+        DynamicValueRelocTableSection As Integer
+        Reserved2 As Integer
+        'Windows 11
+        GuardRFVerifyStackPointerFunctionPointer As LongLong ' VA
+        HotPatchTableOffset As Long
+        Reserved3 As Long
+        EnclaveConfigurationPointer As LongLong ' VA
+        VolatileMetadataPointer As LongLong ' VA
+        GuardEHContinuationTable As LongLong ' VA
+        GuardEHContinuationCount As LongLong
+        GuardXFGCheckFunctionPointer As LongLong ' VA
+        GuardXFGDispatchFunctionPointer As LongLong ' VA
+        GuardXFGTableDispatchFunctionPointer As LongLong ' VA
+        CastGuardOsDeterminedFailureMode As LongLong ' VA
+        GuardMemcpyFunctionPointer As LongLong ' VA
+    End Type
+    [Description("⚠️ **WARNING:** CHECK SIZE BEFORE COPYING: This UDT has members appended in most Windows versions. Only copy the available size.")]
+    Public Type IMAGE_LOAD_CONFIG_DIRECTORY32
+        Size As Long
+        TimeDateStamp As Long
+        MajorVersion As Integer
+        MinorVersion As Integer
+        GlobalFlagsClear As Long
+        GlobalFlagsSet As Long
+        CriticalSectionDefaultTimeout As Long
+        DeCommitFreeBlockThreshold As Long
+        DeCommitTotalFreeThreshold As Long
+        LockPrefixTable As Long ' VA
+        MaximumAllocationSize As Long
+        VirtualMemoryThreshold As Long
+        ProcessAffinityMask As Long
+        ProcessHeapFlags As Long
+        CSDVersion As Integer
+        DependentLoadFlags As Integer
+        EditList As Long ' VA
+        SecurityCookie As Long ' VA
+        SEHandlerTable As Long ' VA
+        SEHandlerCount As Long
+        'Fields available in v8.1+ of the Windows SDK.
+        GuardCFCheckFunctionPointer As Long ' VA
+        GuardCFDispatchFunctionPointer As Long ' VA
+        GuardCFFunctionTable As Long ' VA
+        GuardCFFunctionCount As Long
+        GuardFlags As ImageLoadConfigGuardFlags
+        'Fields available in v10.0.10586.0+ of the Windows SDK.
+        CodeIntegrity As IMAGE_LOAD_CONFIG_CODE_INTEGRITY
+        GuardAddressTakenIatEntryTable As Long ' VA
+        GuardAddressTakenIatEntryCount As Long
+        GuardLongJumpTargetTable As Long ' VA
+        GuardLongJumpTargetCount As Long
+        DynamicValueRelocTable As Long ' VA
+        CHPEMetadataPointer As Long ' VA
+        'Fields available in the v10.0.15063.468+ of the SDK.
+        GuardRFFailureRoutine As Long ' VA
+        GuardRFFailureRoutineFunctionPointer As Long ' VA
+        DynamicValueRelocTableOffset As Long
+        DynamicValueRelocTableSection As Integer
+        Reserved2 As Integer
+        'Windows 11
+        GuardRFVerifyStackPointerFunctionPointer As Long ' VA
+        HotPatchTableOffset As Long
+        Reserved3 As Long
+        EnclaveConfigurationPointer As Long ' VA
+        VolatileMetadataPointer As Long ' VA
+        GuardEHContinuationTable As Long ' VA
+        GuardEHContinuationCount As Long
+        GuardXFGCheckFunctionPointer As Long ' VA
+        GuardXFGDispatchFunctionPointer As Long ' VA
+        GuardXFGTableDispatchFunctionPointer As Long ' VA
+        CastGuardOsDeterminedFailureMode As Long ' VA
+        GuardMemcpyFunctionPointer As Long ' VA
+    End Type
+    [Description("⚠️ **WARNING:** CHECK SIZE BEFORE COPYING: This UDT has members appended in most Windows versions. Only copy the available size.")]
+    Public Type IMAGE_LOAD_CONFIG_DIRECTORY
+        Size As Long
+        TimeDateStamp As Long
+        MajorVersion As Integer
+        MinorVersion As Integer
+        GlobalFlagsClear As Long
+        GlobalFlagsSet As Long
+        CriticalSectionDefaultTimeout As Long
+        DeCommitFreeBlockThreshold As LongPtr
+        DeCommitTotalFreeThreshold As LongPtr
+        LockPrefixTable As LongPtr ' VA
+        MaximumAllocationSize As LongPtr
+        VirtualMemoryThreshold As LongPtr
+        ProcessAffinityMask As LongPtr
+        ProcessHeapFlags As Long
+        CSDVersion As Integer
+        DependentLoadFlags As Integer
+        EditList As LongPtr ' VA
+        SecurityCookie As LongPtr ' VA
+        SEHandlerTable As LongPtr ' VA
+        SEHandlerCount As LongPtr
+        'Fields available in v8.1+ of the Windows SDK.
+        GuardCFCheckFunctionPointer As LongPtr ' VA
+        GuardCFDispatchFunctionPointer As LongPtr ' VA
+        GuardCFFunctionTable As LongPtr ' VA
+        GuardCFFunctionCount As LongPtr
+        GuardFlags As ImageLoadConfigGuardFlags
+        'Fields available in v10.0.10586.0+ of the Windows SDK.
+        CodeIntegrity As IMAGE_LOAD_CONFIG_CODE_INTEGRITY
+        GuardAddressTakenIatEntryTable As LongPtr ' VA
+        GuardAddressTakenIatEntryCount As LongPtr
+        GuardLongJumpTargetTable As LongPtr ' VA
+        GuardLongJumpTargetCount As LongPtr
+        DynamicValueRelocTable As LongPtr ' VA
+        CHPEMetadataPointer As LongPtr ' VA
+        'Fields available in the v10.0.15063.468+ of the SDK.
+        GuardRFFailureRoutine As LongPtr ' VA
+        GuardRFFailureRoutineFunctionPointer As LongPtr ' VA
+        DynamicValueRelocTableOffset As Long
+        DynamicValueRelocTableSection As Integer
+        Reserved2 As Integer
+        'Windows 11
+        GuardRFVerifyStackPointerFunctionPointer As LongPtr ' VA
+        HotPatchTableOffset As Long
+        Reserved3 As Long
+        EnclaveConfigurationPointer As LongPtr ' VA
+        VolatileMetadataPointer As LongPtr ' VA
+        GuardEHContinuationTable As LongPtr ' VA
+        GuardEHContinuationCount As LongPtr
+        GuardXFGCheckFunctionPointer As LongPtr ' VA
+        GuardXFGDispatchFunctionPointer As LongPtr ' VA
+        GuardXFGTableDispatchFunctionPointer As LongPtr ' VA
+        CastGuardOsDeterminedFailureMode As LongPtr ' VA
+        GuardMemcpyFunctionPointer As LongPtr ' VA
+    End Type
+
+    Public Enum IMAGE_DEBUG_TYPE
+        IMAGE_DEBUG_TYPE_UNKNOWN = 0
+        IMAGE_DEBUG_TYPE_COFF = 1
+        IMAGE_DEBUG_TYPE_CODEVIEW = 2 '_PDB_INFO
+        IMAGE_DEBUG_TYPE_FPO = 3
+        IMAGE_DEBUG_TYPE_MISC = 4
+        IMAGE_DEBUG_TYPE_EXCEPTION = 5
+        IMAGE_DEBUG_TYPE_FIXUP = 6
+        IMAGE_DEBUG_TYPE_OMAP_TO_SRC = 7
+        IMAGE_DEBUG_TYPE_OMAP_FROM_SRC = 8
+        IMAGE_DEBUG_TYPE_BORLAND = 9
+        IMAGE_DEBUG_TYPE_RESERVED10 = 10
+        IMAGE_DEBUG_TYPE_BBT = IMAGE_DEBUG_TYPE_RESERVED10
+        IMAGE_DEBUG_TYPE_CLSID = 11
+        IMAGE_DEBUG_TYPE_VC_FEATURE = 12
+        IMAGE_DEBUG_TYPE_POGO = 13
+        IMAGE_DEBUG_TYPE_ILTCG = 14
+        IMAGE_DEBUG_TYPE_MPX = 15
+        IMAGE_DEBUG_TYPE_REPRO = 16
+        IMAGE_DEBUG_TYPE_SPGO = 18
+        IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS = 20
+    End Enum
+    Public Type IMAGE_DEBUG_DIRECTORY
+        Characteristics As Long
+        TimeDateStamp As Long
+        MajorVersion As Integer
+        MinorVersion As Integer
+        Type As IMAGE_DEBUG_TYPE
+        SizeOfData As Long
+        AddressOfRawData As Long
+        PointerToRawData As Long
+    End Type
+    Public Enum IMAGE_DEBUG_EX_CH
+        IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT = &H01
+        IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT_STRICT_MODE = &H02
+        IMAGE_DLLCHARACTERISTICS_EX_CET_SET_CONTEXT_IP_VALIDATION_RELAXED_MODE = &H04
+        IMAGE_DLLCHARACTERISTICS_EX_CET_DYNAMIC_APIS_ALLOW_IN_PROC = &H08
+        IMAGE_DLLCHARACTERISTICS_EX_CET_RESERVED_1 = &H10  ' Reserved for CET policy *downgrade* only!
+        IMAGE_DLLCHARACTERISTICS_EX_CET_RESERVED_2 = &H20  ' Reserved for CET policy *downgrade* only!
+    End Enum
+
+    Public Type IMAGE_COFF_SYMBOLS_HEADER
+        NumberOfSymbols As Long
+        LvaToFirstSymbol As Long
+        NumberOfLinenumbers As Long
+        LvaToFirstLinenumber As Long
+        RvaToFirstByteOfCode As Long
+        RvaToLastByteOfCode As Long
+        RvaToFirstByteOfData As Long
+        RvaToLastByteOfData As Long
+    End Type
+
+    [Description("PdbFileName is a null-terminated ANSI string for which you don't know the length beforehand. Read until null char.")]
+    Public Type PDB_INFO
+        CvSignature As Long
+        Signature As UUID
+        Age As Long
+        PdbFileName As Byte
+    End Type
+
+    Public Enum FPO_FRAME
+        FRAME_FPO = 0
+        FRAME_TRAP = 1
+        FRAME_TSS = 2
+        FRAME_NONFPO = 3
+    End Enum
+    Public Type FPO_DATA
+        ulOffStart As Long ' offset 1st byte of function code
+        cbProcSize As Long ' # bytes in function
+        cdwLocals As Long ' # bytes in locals/4
+        cdwParams As Integer ' # bytes in params/4
+        [Description("Bitfield. See comments in definition.")] Flags As Integer
+        'WORD        cbProlog : 8;           // # bytes in prolog
+        'WORD        cbRegs   : 3;           // # regs saved
+        'WORD        fHasSEH  : 1;           // TRUE if SEH in func
+        'WORD        fUseBP   : 1;           // TRUE if EBP has been allocated
+        'WORD        reserved : 1;           // reserved for future use
+        'WORD        cbFrame  : 2;           // frame type
+    End Type
+    Public Const SIZEOF_RFPO_DATA = 16
+
+    Public Type IMAGE_DEBUG_MISC
+        DataType As Long ' type of misc data, see defines
+        Length As Long ' total length of record, rounded to four
+        ' byte multiple.
+        Unicode As Byte ' TRUE if data is unicode string
+        Reserved(0 To 2) As Byte
+        Data(0 To 0) As Byte ' Actual data
+    End Type
+
+    Public Const IMAGE_POLICY_METADATA_VERSION  = 1
+    Public Const IMAGE_POLICY_SECTION_NAME  = ".tPolicy"
+    Public Const IMAGE_POLICY_METADATA_NAME  = "__ImagePolicyMetadata"
+
+    Public Enum IMAGE_POLICY_ENTRY_TYPE
+        ImagePolicyEntryTypeNone = 0
+        ImagePolicyEntryTypeBool
+        ImagePolicyEntryTypeInt8
+        ImagePolicyEntryTypeUInt8
+        ImagePolicyEntryTypeInt16
+        ImagePolicyEntryTypeUInt16
+        ImagePolicyEntryTypeInt32
+        ImagePolicyEntryTypeUInt32
+        ImagePolicyEntryTypeInt64
+        ImagePolicyEntryTypeUInt64
+        ImagePolicyEntryTypeAnsiString
+        ImagePolicyEntryTypeUnicodeString
+        ImagePolicyEntryTypeOverride
+        ImagePolicyEntryTypeMaximum
+    End Enum
+    Public Enum IMAGE_POLICY_ID
+        ImagePolicyIdNone = 0
+        ImagePolicyIdEtw
+        ImagePolicyIdDebug
+        ImagePolicyIdCrashDump
+        ImagePolicyIdCrashDumpKey
+        ImagePolicyIdCrashDumpKeyGuid
+        ImagePolicyIdParentSd
+        ImagePolicyIdParentSdRev
+        ImagePolicyIdSvn
+        ImagePolicyIdDeviceId
+        ImagePolicyIdCapability
+        ImagePolicyIdScenarioId
+        ImagePolicyIdMaximum
+    End Enum
+
+    Public Type IMAGE_POLICY_ENTRY
+        Type As IMAGE_POLICY_ENTRY_TYPE
+        PolicyId As IMAGE_POLICY_ID
+    ' union {
+        ' const VOID* None;
+        ' BOOLEAN BoolValue;
+        ' INT8 Int8Value;
+        ' UINT8 UInt8Value;
+        ' INT16 Int16Value;
+        ' UINT16 UInt16Value;
+        ' INT32 Int32Value;
+        ' UINT32 UInt32Value;
+        ' INT64 Int64Value;
+        ' UINT64 UInt64Value;
+        ' PCSTR AnsiStringValue;
+        ' PCWSTR UnicodeStringValue;
+    ' } u;    
+        u As LongLong
+    End Type
+    Public Type IMAGE_POLICY_METADATA
+        Version As Byte
+        Reserved0(0 To 6) As Byte
+        ApplicationId As LongLong
+        Policies(ImagePolicyIdMaximum - 1) As IMAGE_POLICY_ENTRY
+    End Type
+    
+
+End Module

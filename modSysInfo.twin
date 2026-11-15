@@ -1,3 +1,4 @@
+'Update 15 Nov 2026;  ..
 Module modSysInfo
 
     Public Enum OBJECT_INFORMATION_CLASS
@@ -575,7 +576,7 @@ Module modSysInfo
     [Description("WARNING: This structure cannot be used as-is directly due to SAFEARRAY considerations. Copy count and array separately.")]
     Public Type RTL_PROCESS_MODULES
         NumberOfModules As Long
-        Modules() As RTL_PROCESS_MODULE_INFORMATION
+        Modules(0 To 0) As RTL_PROCESS_MODULE_INFORMATION
     End Type
     Public Type RTL_PROCESS_MODULE_INFORMATION
         Section As LongPtr
@@ -605,7 +606,7 @@ Module modSysInfo
     [Description("WARNING: This structure cannot be used as-is directly due to SAFEARRAY considerations. Copy count and array separately.")]
     Public Type RTL_PROCESS_LOCKS
         NumberOfLocks As Long
-        Locks() As RTL_PROCESS_LOCK_INFORMATION
+        Locks(0 To 0) As RTL_PROCESS_LOCK_INFORMATION
     End Type
 
     Public Type RTL_PROCESS_BACKTRACE_INFORMATION
@@ -621,7 +622,7 @@ Module modSysInfo
         ReservedMemory As Long
         NumberOfBackTraceLookups As Long
         NumberOfBackTraces As Long
-        BackTraces() As RTL_PROCESS_BACKTRACE_INFORMATION
+        BackTraces(0 To 0) As RTL_PROCESS_BACKTRACE_INFORMATION
     End Type
 
     Public Type SYSTEM_HANDLE_TABLE_ENTRY_INFO
@@ -636,7 +637,7 @@ Module modSysInfo
     [Description("WARNING: This structure cannot be used as-is directly due to SAFEARRAY considerations. Copy count and array separately.")]
     Public Type SYSTEM_HANDLE_INFORMATION
         NumberOfHandles As Long
-        Handles() As SYSTEM_HANDLE_TABLE_ENTRY_INFO
+        Handles(0 To 0) As SYSTEM_HANDLE_TABLE_ENTRY_INFO
     End Type
 
     Public Enum OB_OBJECT_FLAGS
@@ -881,7 +882,7 @@ Module modSysInfo
     
     
     Public Enum FS_INFORMATION_CLASS
-        FileFsVolumeInformation
+        FileFsVolumeInformation = 1
         FileFsLabelInformation
         FileFsSizeInformation
         FileFsDeviceInformation
@@ -1346,7 +1347,7 @@ Module modSysInfo
     Public Type FILE_TRACKING_INFORMATION
         DestinationFile As LongPtr
         ObjectInformationLength As Long
-        ObjectInformation() As Byte
+        ObjectInformation(0 To 0) As Byte
     End Type
     Public Type FILE_ID_BOTH_DIR_INFORMATION
         NextEntryOffset As Long
@@ -1434,7 +1435,7 @@ Module modSysInfo
     [Description("WARNING: You cannot use this struct as-is due to SAFEARRAY considerations. Copy the first 4 bytes, determine the size, then copy the rest into ProcessIdList(0) ")]
     Public Type FILE_PROCESS_IDS_USING_FILE_INFORMATION
         NumberOfProcessIdsInList As Long
-        ProcessIdList() As LongPtr
+        ProcessIdList(0 To 0) As LongPtr
     End Type
     Public Type FILE_NETWORK_PHYSICAL_NAME_INFORMATION
         FileNameLength As Long
@@ -1970,15 +1971,32 @@ Module modSysInfo
         MaxProcessInfoClass = &H64
     End Enum
     Public Type PROCESS_BASIC_INFORMATION
-        ExitStatus                      As Long
-        Reserved0                       As Long
-        PebBaseAddress                  As LongPtr
-        AffinityMask                    As LongPtr
-        BasePriority                    As Long
-        Reserved1                       As Long
-        uUniqueProcessId                As LongPtr
-        uInheritedFromUniqueProcessId   As LongPtr
+        ExitStatus As NTSTATUS
+        PebBaseAddress As LongPtr 'PPEB
+        AffinityMask As LongPtr
+        BasePriority As KPRIORITY
+        UniqueProcessId As LongPtr
+        InheritedFromUniqueProcessId As LongPtr
     End Type
+    Public Type PROCESS_BASIC_INFORMATION32
+        ExitStatus As NTSTATUS
+        PebBaseAddress As Long 'PPEB
+        AffinityMask As Long
+        BasePriority As KPRIORITY
+        UniqueProcessId As Long
+        InheritedFromUniqueProcessId As Long
+    End Type
+    Public Type PROCESS_BASIC_INFORMATION64
+        ExitStatus As Long
+        'Reserved0                       As Long
+        PebBaseAddress As LongLong
+        AffinityMask As LongLong
+        BasePriority As Long
+        'Reserved1                       As Long
+        uUniqueProcessId As LongLong
+        uInheritedFromUniqueProcessId As LongLong
+    End Type
+    
     Public Type RTL_DRIVE_LETTER_CURDIR
         Flags As Integer
         Length As Integer
@@ -3349,6 +3367,121 @@ Module modSysInfo
         UserClaims As LongPtr
     End Type
     
+    Public Enum SECTION_INFORMATION_CLASS
+        SectionBasicInformation   ' q; SECTION_BASIC_INFORMATION
+        SectionImageInformation   ' q; SECTION_IMAGE_INFORMATION
+        SectionRelocationInformation   ' q; ULONG_PTR RelocationDelta // name:wow64:whNtQuerySection_SectionRelocationInformation // since WIN7
+        SectionOriginalBaseInformation   ' q; PVOID BaseAddress // since REDSTONE
+        SectionInternalImageInformation   ' SECTION_INTERNAL_IMAGE_INFORMATION // since REDSTONE2
+        MaxSectionInfoClass
+    End Enum
+
+    Public Type SECTION_BASIC_INFORMATION
+        BaseAddress As LongPtr
+        AllocationAttributes As Long
+        MaximumSize As LARGE_INTEGER
+    End Type
+
+    Public Enum SectionImageBitfield
+        SECIMG_ComPlusNativeReady = &B1
+        SECIMG_ComPlusILOnly = &B10
+        SECIMG_ImageDynamicallyRelocated = &B100
+        SECIMG_ImageMappedFlat = &B1000
+        SECIMG_BaseBelow4gb = &B10000
+        SECIMG_ComPlusPrefer32bit = &B100000
+    End Enum
+    Public Type SECTION_IMAGE_INFORMATION
+        TransferAddress As LongPtr '0x0
+        ZeroBits As Long '0x8
+        MaximumStackSize As LongPtr '0x10
+        CommittedStackSize As LongPtr '0x18
+        SubSystemType As ImageSubsystemType
+        ' union
+        ' {
+            ' struct
+            ' {
+                ' USHORT SubSystemMinorVersion;
+                ' USHORT SubSystemMajorVersion;
+            ' };
+            ' ULONG SubSystemVersion;
+        ' };
+        SubSystemVersion As Long
+        ' union
+        ' {
+            ' struct
+            ' {
+                ' USHORT MajorOperatingSystemVersion;
+                ' USHORT MinorOperatingSystemVersion;
+            ' };
+            ' ULONG OperatingSystemVersion;
+        ' };
+        [Description("GpValue on 6.2")]
+        OperatingSystemVersion As Long
+        ImageCharacteristics As Integer
+        DllCharacteristics As Integer
+        Machine As Integer
+        ImageContainsCode As Byte
+        ' union
+        ' {
+            ' UCHAR ImageFlags;                                                   //0x33
+            ' struct
+            ' {
+                ' UCHAR ComPlusNativeReady : 1;                                     //0x33
+                ' UCHAR ComPlusILOnly : 1;                                          //0x33
+                ' UCHAR ImageDynamicallyRelocated : 1;                              //0x33
+                ' UCHAR ImageMappedFlat : 1;                                        //0x33
+                ' UCHAR BaseBelow4gb : 1;                                           //0x33
+                ' UCHAR ComPlusPrefer32bit : 1;                                     //0x33
+                ' UCHAR Reserved : 2;                                               //0x33
+            ' };
+        ' };
+        [Description("Values in SectionImageBitfield")]
+        /* [ TypeHint(SectionImageBitfield) ] */ ImageFlags As Byte
+        LoaderFlags As Long
+        ImageFileSize As Long
+        Checksum As Long
+    End Type
+
+    Public Type SECTION_INTERNAL_IMAGE_INFORMATION
+        SectionInformation As SECTION_IMAGE_INFORMATION
+        ' union
+        ' {
+            ' ULONG ExtendedFlags;
+            ' struct
+            ' {
+                ' ULONG ImageExportSuppressionEnabled : 1;
+                ' ULONG ImageCetShadowStacksReady : 1; // 20H1
+                ' ULONG ImageXfgEnabled : 1; // 20H2
+                ' ULONG ImageCetShadowStacksStrictMode : 1;
+                ' ULONG ImageCetSetContextIpValidationRelaxedMode : 1;
+                ' ULONG ImageCetDynamicApisAllowInProc : 1;
+                ' ULONG ImageCetDowngradeReserved1 : 1;
+                ' ULONG ImageCetDowngradeReserved2 : 1;
+                ' ULONG Reserved : 24;
+            ' };
+        ' };
+        ExtendedFlags As Long
+    End Type
+
+    Public Enum SECTION_INHERIT
+        SECINH_ViewShare = 1
+        SECINH_ViewUnmap = 2
+    End Enum
+
+    Public Enum NTSectionFlags
+        SEC_HUGE_PAGES = &H00020000
+        SEC_PARTITION_OWNER_HANDLE = &H00040000
+        SEC_64K_PAGES = &H00080000
+        SEC_FILE = &H00800000
+        SEC_IMAGE = &H01000000
+        SEC_PROTECTED_IMAGE = &H02000000
+        SEC_RESERVE = &H04000000
+        SEC_COMMIT = &H08000000
+        SEC_NOCACHE = &H10000000
+        SEC_WRITECOMBINE = &H40000000
+        SEC_LARGE_PAGES = &H80000000
+        SEC_IMAGE_NO_EXECUTE = (SEC_IMAGE Or SEC_NOCACHE)
+    End Enum
     
     
     Public Declare PtrSafe Function ZwQuerySystemInformation Lib "ntoskrnl.exe" (ByVal SystemInformationClass As SYSTEM_INFORMATION_CLASS, SystemInformation As Any, ByVal SystemInformationLength As Long, ReturnLength As Long) As Long
@@ -3359,5 +3492,7 @@ Module modSysInfo
     Public Declare PtrSafe Function ZwQueryInformationProcess Lib "ntoskrnl.exe" (ByVal ProcessHandle As LongPtr, ByVal ProcessInformationClass As PROCESSINFOCLASS, ProccessInformation As Any, ByVal ProcessInformationLength As Long, ReturnLength As Long) As Long
     Public Declare PtrSafe Function ZwQueryInformationToken Lib "ntoskrnl.exe" (ByVal TokenHandle As LongPtr, ByVal TokenInformationClass As TOKEN_INFORMATION_CLASS, TokenInformation As Any, ByVal TokenInformationLength As Long, ReturnLength As Long) As NTSTATUS
     Public Declare PtrSafe Function ZwSetInformationToken Lib "ntoskrnl.exe" (ByVal TokenHandle As LongPtr, ByVal TokenInformationClass As TOKEN_INFORMATION_CLASS, TokenInformation As Any, ByVal TokenInformationLength As Long) As NTSTATUS
-        
+    Public Declare PtrSafe Function ZwSetInformationFile Lib "ntoskrnl.exe" (ByVal FileHandle As LongPtr, IoStatusBlock As IO_STATUS_BLOCK, FileInformation As Any, ByVal Length As Long, ByVal FileInformationClass As FILE_INFORMATION_CLASS) As NTSTATUS
+    Public Declare PtrSafe Function ZwQuerySection Lib "ntoskrnl.exe" (ByVal SectionHandle As LongPtr, ByVal SectionInformationClass As SECTION_INFORMATION_CLASS, SectionInformation As Any, ByVal SectionInformationLength As LongPtr, ReturnLength As LongPtr) As NTSTATUS
+    
 End Module
