@@ -3,6 +3,7 @@ twinBASIC Kernel Mode Support Package
 
 This is a very preliminary effort to supply a package like WinDevLib, but for kernel mode programming in twinBASIC. At this stage, it's extremely preliminary, with only enough coverage to support my public HelloWorldDriver and a few additional projects I'm working on. If you make additions, please help out and submit them to be merged. 
 
+**Updated 15 Nov 2026 (Version 0.3.4)** - Some additional content and bugfixes.\
 **Updated 30 May 2025 (Version 0.2.4)** - Modest expansion focusing mainly on fltmgr for an upcoming project.
 
 ------------------------------
