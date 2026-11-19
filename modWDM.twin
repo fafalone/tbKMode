@@ -3,6 +3,7 @@
 Public Alias KIRQL As Byte
 Public Alias CBoolean As Byte
 Public Alias KPROCESSOR_MODE As Byte
+Public Alias POOL_FLAGS As LongLong
 
 Module modWDM
 'Windows Driver Model Definitions for twinBASIC
@@ -212,6 +213,8 @@ Public Const FLT_NORMALIZE  As Single = 0
 Public Const FLT_RADIX  As Single = 2  ' exponent radix
 Public Const FLT_TRUE_MIN As Single = 1.401298464E-45!   ' min positive value
 
+Public Const FM_LOCK_BIT  = &H1  ' Actual lock bit, 1 = Unlocked, 0 = Locked
+Public Const FM_LOCK_BIT_V  = &H0  ' Lock bit as a bit number
 
 Public Type SID_IDENTIFIER_AUTHORITY
     Value(0 To 5) As Byte
@@ -602,9 +605,9 @@ Public IOCTL_DISK_GET_DRIVE_GEOMETRY As Long
 Public IOCTL_DISK_CHECK_VERIFY As Long
 Public IOCTL_DISK_IS_WRITABLE As Long
 Public IOCTL_DISK_SET_PARTITION_INFO As Long
-Public IOCTL_DISK_FORMAT_TRACKS As Long
-Public Const MOUNTMGRCONTROLTYPE = &H0000006
-Public Const MOUNTDEVCONTROLTYPE = &H0000004
+Public Const IOCTL_DISK_FORMAT_TRACKS As Long = &H7C018
+Public Const MOUNTMGRCONTROLTYPE = &H0000006D
+Public Const MOUNTDEVCONTROLTYPE = &H0000004D
 Public IOCTL_MOUNTMGR_QUERY_POINTS As Long
 Public IOCTL_MOUNTDEV_QUERY_DEVICE_NAME As Long
 
@@ -634,17 +637,17 @@ Public Type OBJECT_ATTRIBUTES
 End Type
 
 #If Win64 Then
-Public Type _SLIST_HEADER
+Public Type SLIST_HEADER
     HeaderX64(15) As Byte
 End Type
 #Else
-Public Type _SLIST_HEADER
+Public Type SLIST_HEADER
     Alignment As LongLong
 End Type
 #End If
 
 Public Type GENERAL_LOOKASIDE_LAYOUT
-    ListHead As _SLIST_HEADER' or _SINGLE_LIST_ENTRY
+    ListHead As SLIST_HEADER' or SINGLE_LIST_ENTRY
     Depth As Integer
     MaximumDepth As Integer
     TotalAllocates As Long
@@ -662,21 +665,20 @@ Public Type GENERAL_LOOKASIDE_LAYOUT
     Future(1) As Long
 End Type
 
-Public Type _GENERAL_LOOKASIDE
+Public Type GENERAL_LOOKASIDE
     L As GENERAL_LOOKASIDE_LAYOUT
     #If Win64 Then
-    align(31) As Byte 'LOOKASIDE_ALIGN
-    #Else
-    align(55) As Byte
+    align(31) As Byte 'LOOKASIDE_ALIGN DECLSPEC_CACHEALIGN
     #End If
 End Type
 
 
 Public Type NPAGED_LOOKASIDE_LIST
-    L As _GENERAL_LOOKASIDE
+    L As GENERAL_LOOKASIDE
     #If Win64 = 0 Then
     Lock__ObsoleteButDoNotDelete As Long
-    align(59) As Byte
+    #Else
+    align(15) As Byte
     #End If
 End Type
 
@@ -1015,6 +1017,7 @@ Public Type DEVICE_OBJECT
     DeviceType          As Long
     StackSize           As Byte
     #If Win64 Then
+    __pad(2) As Byte
     Queue(71)           As Byte 'This includes alignment padding, so be careful if copying out.
     #Else
     Queue(39)           As Byte
@@ -1029,6 +1032,9 @@ Public Type DEVICE_OBJECT
     Spare1              As Integer
     DeviceObjExtension  As LongPtr
     Reserved            As LongPtr
+    #If Win64 Then
+    __align As LongLong 'DECLSPEC_ALIGN(MEMORY_ALLOCATION_ALIGNMENT)
+    #End If
 End Type 'Expected size x64=0x150, x86=0xb8
 
 Public Enum FILE_OBJECT_FLAGS
@@ -1144,19 +1150,31 @@ Public Type VPB
 End Type
 
 Public Enum POOL_TYPE
-    NonPagedPool = 0
+    NonPagedPool
     NonPagedPoolExecute = NonPagedPool
-    PagedPool = 1
+    PagedPool
     NonPagedPoolMustSucceed = NonPagedPool + 2
-    DontUseThisType = 2
+    DontUseThisType
     NonPagedPoolCacheAligned = NonPagedPool + 4
-    PagedPoolCacheAligned = 3
+    PagedPoolCacheAligned
     NonPagedPoolCacheAlignedMustS = NonPagedPool + 6
-    MaxPoolType = 4
+    MaxPoolType
+
+    '
+    ' Define base types for NonPaged (versus Paged) pool, for use in cracking
+    ' the underlying pool type.
+    '
+
     NonPagedPoolBase = 0
     NonPagedPoolBaseMustSucceed = NonPagedPoolBase + 2
     NonPagedPoolBaseCacheAligned = NonPagedPoolBase + 4
     NonPagedPoolBaseCacheAlignedMustS = NonPagedPoolBase + 6
+
+    '
+    ' Note these per session types are carefully chosen so that the appropriate
+    ' masking still applies as well as MaxPoolType above.
+    '
+
     NonPagedPoolSession = 32
     PagedPoolSession = NonPagedPoolSession + 1
     NonPagedPoolMustSucceedSession = PagedPoolSession + 1
@@ -1164,10 +1182,32 @@ Public Enum POOL_TYPE
     NonPagedPoolCacheAlignedSession = DontUseThisTypeSession + 1
     PagedPoolCacheAlignedSession = NonPagedPoolCacheAlignedSession + 1
     NonPagedPoolCacheAlignedMustSSession = PagedPoolCacheAlignedSession + 1
+
     NonPagedPoolNx = 512
     NonPagedPoolNxCacheAligned = NonPagedPoolNx + 4
     NonPagedPoolSessionNx = NonPagedPoolNx + 32
 End Enum
+
+Public Const POOL_FLAG_REQUIRED_START  = &H0000000000000001^
+Public Const POOL_FLAG_USE_QUOTA  = &H0000000000000001^  ' Charge quota
+Public Const POOL_FLAG_UNINITIALIZED  = &H0000000000000002^  ' Don't zero-initialize allocation
+Public Const POOL_FLAG_SESSION  = &H0000000000000004^  ' Use session specific pool
+Public Const POOL_FLAG_CACHE_ALIGNED  = &H0000000000000008^  ' Cache aligned allocation
+Public Const POOL_FLAG_RESERVED1  = &H0000000000000010^  ' Reserved for system use
+Public Const POOL_FLAG_RAISE_ON_FAILURE  = &H0000000000000020^  ' Raise exception on failure
+Public Const POOL_FLAG_NON_PAGED  = &H0000000000000040^  ' Non paged pool NX
+Public Const POOL_FLAG_NON_PAGED_EXECUTE  = &H0000000000000080^  ' Non paged pool executable
+Public Const POOL_FLAG_PAGED  = &H0000000000000100^  ' Paged pool
+Public Const POOL_FLAG_RESERVED2  = &H0000000000000200^  ' Reserved for system use
+Public Const POOL_FLAG_RESERVED3  = &H0000000000000400^  ' Reserved for system use
+Public Const POOL_FLAG_LAST_KNOWN_REQUIRED  = POOL_FLAG_RESERVED3  ' Must be set to the last known required entry.
+Public Const POOL_FLAG_REQUIRED_END  = &H0000000080000000^
+Public Const POOL_FLAG_OPTIONAL_START  = &H0000000100000000^
+Public Const POOL_FLAG_SPECIAL_POOL  = &H0000000100000000^  ' Make special pool allocation
+Public Const POOL_FLAG_OPTIONAL_END  = &H8000000000000000^
+Public Const POOL_FLAG_REQUIRED_MASK  = &H00000000FFFFFFFF^
+
+Public Const POOL_FLAG_UNUSED_REQUIRED_BITS = (POOL_FLAG_REQUIRED_MASK And Not (POOL_FLAG_LAST_KNOWN_REQUIRED Or (POOL_FLAG_LAST_KNOWN_REQUIRED - 1)))
 
 Public Enum eKPROCESSOR_MODE
     KernelMode
@@ -1355,7 +1395,7 @@ Public Const RTL_QUERY_REGISTRY_TYPECHECK  = &H00000100 ' Used with RTL_QUERY_RE
                                                         '  Use the most significant byte of DefaultType from QueryTable, as the
                                                         '  caller's expected REG_TYPE
 Public Const RTL_QUERY_REGISTRY_TYPECHECK_SHIFT  = 24
-Public Const RTL_QUERY_REGISTRY_TYPECHECK_MASK  = (&Hff << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT)
+Public Const RTL_QUERY_REGISTRY_TYPECHECK_MASK  = (&Hff& << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT)
 
 
 
@@ -3056,6 +3096,87 @@ Public Enum NTSTATUS
     HIDP_STATUS_I8242_TRANS_UNKNOWN = HIDP_STATUS_I8042_TRANS_UNKNOWN
 End Enum
 
+Public Enum RTL_FAST_FAIL
+    FAST_FAIL_LEGACY_GS_VIOLATION = 0
+    FAST_FAIL_VTGUARD_CHECK_FAILURE = 1
+    FAST_FAIL_STACK_COOKIE_CHECK_FAILURE = 2
+    FAST_FAIL_CORRUPT_LIST_ENTRY = 3
+    FAST_FAIL_INCORRECT_STACK = 4
+    FAST_FAIL_INVALID_ARG = 5
+    FAST_FAIL_GS_COOKIE_INIT = 6
+    FAST_FAIL_FATAL_APP_EXIT = 7
+    FAST_FAIL_RANGE_CHECK_FAILURE = 8
+    FAST_FAIL_UNSAFE_REGISTRY_ACCESS = 9
+    FAST_FAIL_GUARD_ICALL_CHECK_FAILURE = 10
+    FAST_FAIL_GUARD_WRITE_CHECK_FAILURE = 11
+    FAST_FAIL_INVALID_FIBER_SWITCH = 12
+    FAST_FAIL_INVALID_SET_OF_CONTEXT = 13
+    FAST_FAIL_INVALID_REFERENCE_COUNT = 14
+    FAST_FAIL_INVALID_JUMP_BUFFER = 18
+    FAST_FAIL_MRDATA_MODIFIED = 19
+    FAST_FAIL_CERTIFICATION_FAILURE = 20
+    FAST_FAIL_INVALID_EXCEPTION_CHAIN = 21
+    FAST_FAIL_CRYPTO_LIBRARY = 22
+    FAST_FAIL_INVALID_CALL_IN_DLL_CALLOUT = 23
+    FAST_FAIL_INVALID_IMAGE_BASE = 24
+    FAST_FAIL_DLOAD_PROTECTION_FAILURE = 25
+    FAST_FAIL_UNSAFE_EXTENSION_CALL = 26
+    FAST_FAIL_DEPRECATED_SERVICE_INVOKED = 27
+    FAST_FAIL_INVALID_BUFFER_ACCESS = 28
+    FAST_FAIL_INVALID_BALANCED_TREE = 29
+    FAST_FAIL_INVALID_NEXT_THREAD = 30
+    FAST_FAIL_GUARD_ICALL_CHECK_SUPPRESSED = 31  ' Telemetry, nonfatal
+    FAST_FAIL_APCS_DISABLED = 32
+    FAST_FAIL_INVALID_IDLE_STATE = 33
+    FAST_FAIL_MRDATA_PROTECTION_FAILURE = 34
+    FAST_FAIL_UNEXPECTED_HEAP_EXCEPTION = 35
+    FAST_FAIL_INVALID_LOCK_STATE = 36
+    FAST_FAIL_GUARD_JUMPTABLE = 37  ' Known to compiler, must retain value 37
+    FAST_FAIL_INVALID_LONGJUMP_TARGET = 38
+    FAST_FAIL_INVALID_DISPATCH_CONTEXT = 39
+    FAST_FAIL_INVALID_THREAD = 40
+    FAST_FAIL_INVALID_SYSCALL_NUMBER = 41  ' Telemetry, nonfatal
+    FAST_FAIL_INVALID_FILE_OPERATION = 42  ' Telemetry, nonfatal
+    FAST_FAIL_LPAC_ACCESS_DENIED = 43  ' Telemetry, nonfatal
+    FAST_FAIL_GUARD_SS_FAILURE = 44
+    FAST_FAIL_LOADER_CONTINUITY_FAILURE = 45  ' Telemetry, nonfatal
+    FAST_FAIL_GUARD_EXPORT_SUPPRESSION_FAILURE = 46
+    FAST_FAIL_INVALID_CONTROL_STACK = 47
+    FAST_FAIL_SET_CONTEXT_DENIED = 48
+    FAST_FAIL_INVALID_IAT = 49
+    FAST_FAIL_HEAP_METADATA_CORRUPTION = 50
+    FAST_FAIL_PAYLOAD_RESTRICTION_VIOLATION = 51
+    FAST_FAIL_LOW_LABEL_ACCESS_DENIED = 52  ' Telemetry, nonfatal
+    FAST_FAIL_ENCLAVE_CALL_FAILURE = 53
+    FAST_FAIL_UNHANDLED_LSS_EXCEPTON = 54
+    FAST_FAIL_ADMINLESS_ACCESS_DENIED = 55  ' Telemetry, nonfatal
+    FAST_FAIL_UNEXPECTED_CALL = 56
+    FAST_FAIL_CONTROL_INVALID_RETURN_ADDRESS = 57
+    FAST_FAIL_UNEXPECTED_HOST_BEHAVIOR = 58
+    FAST_FAIL_FLAGS_CORRUPTION = 59
+    FAST_FAIL_VEH_CORRUPTION = 60
+    FAST_FAIL_ETW_CORRUPTION = 61
+    FAST_FAIL_RIO_ABORT = 62
+    FAST_FAIL_INVALID_PFN = 63
+    FAST_FAIL_GUARD_ICALL_CHECK_FAILURE_XFG = 64
+    FAST_FAIL_CAST_GUARD = 65  ' Known to compiler, must retain value 65
+    FAST_FAIL_HOST_VISIBILITY_CHANGE = 66
+    FAST_FAIL_KERNEL_CET_SHADOW_STACK_ASSIST = 67
+    FAST_FAIL_PATCH_CALLBACK_FAILED = 68
+    FAST_FAIL_NTDLL_PATCH_FAILED = 69
+    FAST_FAIL_INVALID_FLS_DATA = 70
+    FAST_FAIL_ASAN_ERROR = 71  ' Known to Asan, must retain value 71
+    FAST_FAIL_CLR_EXCEPTION_AOT = 72
+    FAST_FAIL_POINTER_AUTH_INVALID_RETURN_ADDRESS = 73
+    FAST_FAIL_INVALID_THREAD_STATE = 74
+    FAST_FAIL_CORRUPT_WOW64_STATE = 75
+    FAST_FAIL_INVALID_EXTENDED_STATE = 76
+    FAST_FAIL_KERNEL_POINTER_EXPECTED = 77
+    FAST_FAIL_INVALID_SME_STATE = 78
+    FAST_FAIL_INVALID_FAST_FAIL_CODE = &HFFFFFFFF
+End Enum
+
+
 Public Const METHOD_BUFFERED = 0
 Public Const METHOD_IN_DIRECT  = 1
 Public Const METHOD_OUT_DIRECT  = 2
@@ -3133,6 +3254,42 @@ Public Enum ALTERNATIVE_ARCHITECTURE_TYPE
     NEC98x86 = 1
     EndAlternatives = 2
 End Enum
+Public Enum VER_SUITE_VALUES
+    VER_SERVER_NT = &H80000000
+    VER_WORKSTATION_NT = &H40000000
+    VER_SUITE_SMALLBUSINESS = &H00000001
+    VER_SUITE_ENTERPRISE = &H00000002
+    VER_SUITE_BACKOFFICE = &H00000004
+    VER_SUITE_COMMUNICATIONS = &H00000008
+    VER_SUITE_TERMINAL = &H00000010
+    VER_SUITE_SMALLBUSINESS_RESTRICTED = &H00000020
+    VER_SUITE_EMBEDDEDNT = &H00000040
+    VER_SUITE_DATACENTER = &H00000080
+    VER_SUITE_SINGLEUSERTS = &H00000100
+    VER_SUITE_PERSONAL = &H00000200
+    VER_SUITE_BLADE = &H00000400
+    VER_SUITE_EMBEDDED_RESTRICTED = &H00000800
+    VER_SUITE_SECURITY_APPLIANCE = &H00001000
+    VER_SUITE_STORAGE_SERVER = &H00002000
+    VER_SUITE_COMPUTE_SERVER = &H00004000
+    VER_SUITE_WH_SERVER = &H00008000&
+    VER_SUITE_MULTIUSERTS = &H00020000
+End Enum
+Public Enum SharedDataFlagsMasks
+    DbgErrorPortPresent = &H0001
+    DbgElevationEnabled = &H0002
+    DbgVirtEnabled = &H0004
+    DbgInstallerDetectEnabled = &H0008
+    DbgLkgEnabled = &H0010 '6.2 and higher
+    DbgSystemDllRelocated = &H0010 '6.0 and 6.1
+    DbgDynProcessorEnabled = &H0020
+    DbgSEHValidationEnabled = &H0040 '6.1 only
+    DbgConsoleBrokerEnabled = &H0040 '6.2 and higher
+    DbgSecureBootEnabled = &H0080 '6.2 and higher
+    DbgMultiSessionSku = &H0100 '10.0 and higher
+    DbgMultiUsersInSessionSku = &H200 '1607 and higher
+    DbgStateSeparationEnabled = &H400 '1709 and higher
+End Enum
 Public Type KUSER_SHARED_DATA
     TickCountLowDeprecated As Long '0x0
     TickCountMultiplier As Long '0x4
@@ -3146,55 +3303,110 @@ Public Type KUSER_SHARED_DATA
     CryptoExponent As Long '0x23c
     TimeZoneId As Long '0x240
     LargePageMinimum As Long '0x244
-    Reserved2(0 To 6) As Long '0x248
+    ' Reserved2(0 To 6) As Long '0x248
+    AitSamplingValue As Long '0x24C
+    AppCompatFlag As Long '0x250
+    #If (TWINBASIC = 1) Or (Win64 = 1) Then
+    RNGSeedVersion As LongLong
+    #Else
+    RNGSeedVersion As Currency
+    #End If
+    GlobalValidationRunlevel As Long
+    TimeZoneBiasStamp As Long
+    NtBuildNumber As Long
     NtProductType As NT_PRODUCT_TYPE '0x264
-    ProductTypeIsValid As Byte '0x268
+    ProductTypeIsValid As CBoolean '0x268
+    Reserved0 As CBoolean
+    NativeProcessorArchitecture As Integer
     NtMajorVersion As Long '0x26c
     NtMinorVersion As Long '0x270
-    ProcessorFeatures(0 To 63) As Byte '0x274
-    Reserved1 As Long '0x2b4
-    Reserved3 As Long '0x2b8
+    ProcessorFeatures(0 To 63) As CBoolean '0x274  See PROCESSOR_FEATURES enum. The order matches.
+    Reserved1 As Long '0x2b4 MmHighestUserAddress 
+    Reserved3 As Long '0x2b8 MmSystemRangeStart
     TimeSlip As Long '0x2bc
     AlternativeArchitecture As ALTERNATIVE_ARCHITECTURE_TYPE '0x2c0
+    BootId As Long 'Windows 10+ only
     SystemExpirationDate As LARGE_INTEGER '0x2c8
-    SuiteMask As Long '0x2d0
-    KdDebuggerEnabled As Byte '0x2d4
-    NXSupportPolicy As Byte '0x2d5
+    SuiteMask As VER_SUITE_VALUES '0x2d0
+    KdDebuggerEnabled As CBoolean '0x2d4
+    MitigationPolicies As Byte '0x2d5
+    'struct MitigationPolicies {
+    '    UCHAR NXSupportPolicy:2
+    '    UCHAR SEHValidationPolicy:2
+    '    UCHAR CurDirDevicesSkippedForDlls:2
+    '    UCHAR Reserved:2
+    '}
+    ' Microsoft defines the following as allowed values for the NXSupportPolicy:
+    ' 0 for NX_SUPPORT_POLICY_ALWAYSOFF;
+    ' 1 for NX_SUPPORT_POLICY_ALWAYSON;
+    ' 2 for NX_SUPPORT_POLICY_OPTIN;
+    ' 3 for NX_SUPPORT_POLICY_OPTOUT;
+    ' and another set for the SEHValidationPolicy:
+    ' 0 for SEH_VALIDATION_POLICY_ON;
+    ' 1 for SEH_VALIDATION_POLICY_OFF;
+    ' 2 for SEH_VALIDATION_POLICY_TELEMETRY;
+    ' 3 for SEH_VALIDATION_POLICY_DEFER.
+    CyclesPerYield As Integer 'Only on Win10 1903 and higher
     ActiveConsoleId As Long '0x2d8
     DismountCount As Long '0x2dc
     ComPlusPackage As Long '0x2e0
     LastSystemRITEventTickCount As Long '0x2e4
     NumberOfPhysicalPages As Long '0x2e8
-    SafeBootMode As Byte '0x2ec
-    TraceLogging As Long '0x2f0
+    SafeBootMode As CBoolean '0x2ec
+    VirtualizationFlags As Byte
+    Reserved12(1) As Byte
+    SharedDataFlags As SharedDataFlagsMasks '0x2f0 NOTE: TraceLogging on 2k/XP
+    DataFlagsPad(0) As Long
+    #If (TWINBASIC = 1) Or (Win64 = 1) Then
     TestRetInstruction As LongLong '0x2f8
-    SystemCall As Long '0x300
-    SystemCallReturn As Long '0x304
-    SystemCallPad(0 To 2) As LongLong '0x308
+    #Else
+    TestRetInstruction As Currency
+    #End If
+    QpcFrequency As LongLong '0x300
+    SystemCall As Long '0x304
+    #If (TWINBASIC = 1) Or (Win64 = 1) Then
+    SystemCallPad(0 To 1) As LongLong '0x308
+    ' union
+    ' {
+        ' volatile KSYSTEM_TIME TickCount;
+        ' volatile ULONG64 TickCountQuad;
+        ' struct
+        ' {
+            ' ULONG ReservedTickCountOverlay[3];
+            ' ULONG TickCountPad[1];
+        ' } DUMMYSTRUCTNAME;
+    ' } DUMMYUNIONNAME3;
+    TickCountUnion(1) As LongLong '0x320
+    #Else
+    SystemCallPad(0 To 1) As Currency    
+    TickCountQuad As Currency
     'union
     '{
     '    volatile struct _KSYSTEM_TIME TickCount;                            //0x320
-    TickCountQuad As LongLong '0x320
-    Pad As LongLong 'Since not using _KSYSTEM_TIME
+    'TickCount As KSYSTEM_TIME
+    ReservedTickCountOverlay(1) As Long 'Since not using _KSYSTEM_TIME
     '};
+    #End If
     Cookie As Long '0x330
     'Wow64SharedInformation(0 To 15) As Long '0x334
 End Type
 
 Public Enum ProcessAccessRights
-    PROCESS_ALL_ACCESS = (STANDARD_RIGHTS_REQUIRED Or SYNCHRONIZE Or &HFFF&)
-    PROCESS_TERMINATE = &H1 ' Enables using the process handle in the TerminateProcess function to terminate the process.
-    PROCESS_CREATE_THREAD = &H2   ' Enables using the process handle in the CreateRemoteThread function to create a thread in the process.
-    PROCESS_VM_OPERATION = &H8 ' Enables using the process handle in the VirtualProtectEx and WriteProcessMemory functions to modify the virtual memory of the process.
-    PROCESS_VM_READ = &H10     ' Enables using the process handle in the ReadProcessMemory function to read from the virtual memory of the process.
-    PROCESS_VM_WRITE = &H20 ' Enables using the process handle in the WriteProcessMemory function to write to the virtual memory of the process.
-    PROCESS_DUP_HANDLE = &H40   ' Enables using the process handle as either the source or target process in the DuplicateHandle function to duplicate a handle
-    PROCESS_CREATE_PROCESS = &H80 ' Required to use this process as the parent process with PROC_THREAD_ATTRIBUTE_PARENT_PROCESS.
-    PROCESS_SET_QUOTA = &H100 ' Required to set memory limits using SetProcessWorkingSetSize.
-    PROCESS_SET_INFORMATION = &H200 ' Enables using the process handle in the SetPriorityClass function to set the priority class of the process.
-    PROCESS_QUERY_INFORMATION = &H400 ' Enables using the process handle in the GetExitCodeProcess and GetPriorityClass functions to read information from the process object.
-    PROCESS_SUSPEND_RESUME = &H800 ' Required to suspend or resume a process.
-    PROCESS_QUERY_LIMITED_INFORMATION = &H1000 ' Required to retrieve certain information about a process (see GetExitCodeProcess, GetPriorityClass, IsProcessInJob, QueryFullProcessImageName).
+    PROCESS_ALL_ACCESS = (STANDARD_RIGHTS_REQUIRED Or SYNCHRONIZE Or &HFFFF&)
+    PROCESS_TERMINATE = &H1                     ' Enables using the process handle in the TerminateProcess function to terminate the process.
+    PROCESS_CREATE_THREAD = &H2                 ' Enables using the process handle in the CreateRemoteThread function to create a thread in the process.
+    PROCESS_SET_SESSIONID = &H4
+    PROCESS_VM_OPERATION = &H8                  ' Enables using the process handle in the VirtualProtectEx and WriteProcessMemory functions to modify the virtual memory of the process.
+    PROCESS_VM_READ = &H10                      ' Enables using the process handle in the ReadProcessMemory function to read from the virtual memory of the process.
+    PROCESS_VM_WRITE = &H20                     ' Enables using the process handle in the WriteProcessMemory function to write to the virtual memory of the process.
+    PROCESS_DUP_HANDLE = &H40                   ' Enables using the process handle as either the source or target process in the DuplicateHandle function to duplicate a handle
+    PROCESS_CREATE_PROCESS = &H80               ' Required to use this process as the parent process with PROC_THREAD_ATTRIBUTE_PARENT_PROCESS.
+    PROCESS_SET_QUOTA = &H100                   ' Required to set memory limits using SetProcessWorkingSetSize.
+    PROCESS_SET_INFORMATION = &H200             ' Enables using the process handle in the SetPriorityClass function to set the priority class of the process.
+    PROCESS_QUERY_INFORMATION = &H400           ' Enables using the process handle in the GetExitCodeProcess and GetPriorityClass functions to read information from the process object.
+    PROCESS_SUSPEND_RESUME = &H800              ' Required to suspend or resume a process.
+    PROCESS_QUERY_LIMITED_INFORMATION = &H1000  ' Required to retrieve certain information about a process (see GetExitCodeProcess, GetPriorityClass, IsProcessInJob, QueryFullProcessImageName).
+    PROCESS_SET_LIMITED_INFORMATION = &H2000
 End Enum
 Public Enum ThreadAccessRights
     THREAD_DIRECT_IMPERSONATION = &H200
@@ -3408,7 +3620,7 @@ Public Type OB_POST_OPERATION_INFORMATION
     ObjectType As LongPtr
     CallContext As LongPtr
     ReturnStatus As NTSTATUS
-    Parameters As OB_POST_OPERATION_PARAMETERS
+    Parameters As LongPtr 'POB_POST_OPERATION_PARAMETERS
 End Type
 
 Public Enum OB_PREOP_CALLBACK_STATUS
@@ -3447,15 +3659,19 @@ Public Enum KPRIORITY
     MAXIMUM_PRIORITY = 32  ' Number of thread priority levels
 End Enum
 
+Public Enum MEMORY_CACHING_TYPE_ORIG
+    MmFrameBufferCached = 2
+End Enum
+
 Public Enum MEMORY_CACHING_TYPE
-    MmNonCached
-    MmCached
-    MmWriteCombined
+    MmNonCached = cFALSE
+    MmCached = cTrue
+    MmWriteCombined = MmFrameBufferCached
     MmHardwareCoherentCached
-    MmNonCachedUnordered
+    MmNonCachedUnordered ' IA64
     MmUSWCCached
     MmMaximumCacheType
-    MmNotMapped
+    MmNotMapped = -1
 End Enum
 
 [Description("NOTE: Windows 10+ only")]
@@ -3465,7 +3681,6 @@ Public Enum PSCREATETHREADNOTIFYTYPE
 End Enum
 
 Public Type IMAGE_INFO
-    ImageBase As LongPtr
 ' union {
     ' ULONG Properties;
     ' struct {
@@ -3481,6 +3696,7 @@ Public Type IMAGE_INFO
     ' };
 ' };
     Properties As Long
+    ImageBase As LongPtr
     ImageSelector As Long
     ImageSize As LongPtr
     ImageSectionNumber As Long
@@ -4457,7 +4673,7 @@ Public Enum PS_ATTRIBUTE_NUM
     PsAttributeEnableOptionalXStateFeatures
     PsAttributeMax
 End Enum
-Public Const PS_ATTRIBUTE_NUMBER_MASK  = &H0000ffff
+Public Const PS_ATTRIBUTE_NUMBER_MASK  = &H0000ffff&
 Public Const PS_ATTRIBUTE_THREAD  = &H00010000  ' may be used with thread creation
 Public Const PS_ATTRIBUTE_INPUT  = &H00020000  ' input only
 Public Const PS_ATTRIBUTE_ADDITIVE  = &H00040000  ' "accumulated" e.g. bitmasks, counters, etc.
@@ -4831,9 +5047,9 @@ Public Declare PtrSafe Function DbgPrint1 CDecl Lib "ntoskrnl.exe" Alias "DbgPri
 Public Declare PtrSafe Function DbgPrint2 CDecl Lib "ntoskrnl.exe" Alias "DbgPrint" (ByVal Format As LongPtr, Arg1 As Any, Arg2 As Any) As Long
 Public Declare PtrSafe Function DbgPrint3 CDecl Lib "ntoskrnl.exe" Alias "DbgPrint" (ByVal Format As LongPtr, Arg1 As Any, Arg2 As Any, Arg3 As Any) As Long
 Public Declare PtrSafe Function DbgPrintEx CDecl Lib "ntoskrnl.exe" (ByVal ComponentId As DPFLTR_TYPE, ByVal Level As DbgPrntLevels, ByVal Format As LongPtr /* Currently unsupported in kernel mode: , ByVal ParamArray Args As Any()*/) As Long
-Public Declare PtrSafe Function DbgPrintEx1 CDecl Lib "ntoskrnl.exe" Alias "DbgPrintEx" (ByVal Format As LongPtr, Arg1 As Any) As Long
-Public Declare PtrSafe Function DbgPrintEx2 CDecl Lib "ntoskrnl.exe" Alias "DbgPrintEx" (ByVal Format As LongPtr, Arg1 As Any, Arg2 As Any) As Long
-Public Declare PtrSafe Function DbgPrintEx3 CDecl Lib "ntoskrnl.exe" Alias "DbgPrintEx" (ByVal Format As LongPtr, Arg1 As Any, Arg2 As Any, Arg3 As Any) As Long
+Public Declare PtrSafe Function DbgPrintEx1 CDecl Lib "ntoskrnl.exe" Alias "DbgPrintEx" (ByVal ComponentId as Long, byval Level As Long, ByVal Format As LongPtr, Arg1 As Any) As Long
+Public Declare PtrSafe Function DbgPrintEx2 CDecl Lib "ntoskrnl.exe" Alias "DbgPrintEx" (ByVal ComponentId as Long, ByVal Level As Long, ByVal Format As LongPtr, Arg1 As Any, Arg2 As Any) As Long
+Public Declare PtrSafe Function DbgPrintEx3 CDecl Lib "ntoskrnl.exe" Alias "DbgPrintEx" (ByVal ComponentId as Long, ByVal Level As Long, ByVal Format As LongPtr, Arg1 As Any, Arg2 As Any, Arg3 As Any) As Long
 
 Public Declare PtrSafe Function wcslen CDecl Lib "ntoskrnl.exe" (ByVal _String As LongPtr) As LongPtr
 Public Declare PtrSafe Function wcsnlen CDecl Lib "ntoskrnl.exe" (ByVal _String As LongPtr, ByVal _MaxCount As LongPtr) As LongPtr
@@ -4852,10 +5068,10 @@ Public Declare PtrSafe Function wcsstr CDecl Lib "ntoskrnl.exe" (ByVal dest As L
 Public Declare PtrSafe Function IoCreateDevice Lib "ntoskrnl.exe" (DriverObject As DRIVER_OBJECT, _
                                                                     ByVal DeviceExtensionSize As Long, _
                                                                     DeviceName As UNICODE_STRING, _
-                                                                    ByVal DeviceType As Long, _
+                                                                    ByVal DeviceType As DEVICE_TYPE, _
                                                                     ByVal DeviceCharacteristics As Long, _
-                                                                    ByVal Exclusive As Long, _
-                                                                    DeviceObject As DEVICE_OBJECT) As Long
+                                                                    ByVal Exclusive As CBoolean, _
+                                                                    DeviceObject As LongPtr) As Long
 
 Public Declare PtrSafe Sub IoCompleteRequest Lib "ntoskrnl.exe" (pIrp As IRP, ByVal PriorityBoost As Byte)
 Public Declare PtrSafe Function IoCreateSymbolicLink Lib "ntoskrnl.exe" (SymbolicLinkName As UNICODE_STRING, DeviceName As UNICODE_STRING) As Long
@@ -4863,9 +5079,9 @@ Public Declare PtrSafe Function IoDeleteSymbolicLink Lib "ntoskrnl.exe" (Symboli
 Public Declare PtrSafe Sub IoDeleteDevice Lib "ntoskrnl.exe" (DeviceObject As Any)
 Public Declare PtrSafe Function IoAllocateDriverObjectExtension Lib "ntoskrnl.exe" (DriverObject As DRIVER_OBJECT, ClientIdentificationAddress As Any, ByVal DriverObjectExtensionSize As Long, DriverExtensionObject As LongPtr) As Long
 Public Declare PtrSafe Function IoGetDriverObjectExtension Lib "ntoskrnl.exe" (DriverObject As DRIVER_OBJECT, ClientIdentificationAddress As Any) As LongPtr
-Public Declare PtrSafe Function IoAcquireRemoveLockEx Lib "ntoskrnl.exe" (RemoveLock As IO_REMOVE_LOCK, Tag As Any, ByVal File As LongPtr, ByVal Line As Long, ByVal RemlockSize As Long) As Long
-Public Declare PtrSafe Sub IoReleaseRemoveLockEx Lib "ntoskrnl.exe" (RemoveLock As IO_REMOVE_LOCK, Tag As Any, ByVal RemlockSize As Long)
-Public Declare PtrSafe Sub IoReleaseRemoveLockAndWaitEx Lib "ntoskrnl.exe" (RemoveLock As IO_REMOVE_LOCK, Tag As Any, ByVal RemlockSize As Long)
+Public Declare PtrSafe Function IoAcquireRemoveLockEx Lib "ntoskrnl.exe" (RemoveLock As IO_REMOVE_LOCK, ByVal Tag As LongPtr, ByVal File As LongPtr, ByVal Line As Long, ByVal RemlockSize As Long) As Long
+Public Declare PtrSafe Sub IoReleaseRemoveLockEx Lib "ntoskrnl.exe" (RemoveLock As IO_REMOVE_LOCK, ByVal Tag As LongPtr, ByVal RemlockSize As Long)
+Public Declare PtrSafe Sub IoReleaseRemoveLockAndWaitEx Lib "ntoskrnl.exe" (RemoveLock As IO_REMOVE_LOCK, ByVal Tag As LongPtr, ByVal RemlockSize As Long)
 Public Declare PtrSafe Sub IoInitializeRemoveLockEx Lib "ntoskrnl.exe" (RemoveLock As IO_REMOVE_LOCK, ByVal AllocateTag As Long, ByVal MaxLockedMinutes As Long, ByVal HighWaterMark As Long, ByVal RemlockSize As Long)
 Public Declare PtrSafe Function IoAttachDeviceToDeviceStack Lib "ntoskrnl.exe" (SourceDevice As DEVICE_OBJECT, TargetDevice As DEVICE_OBJECT) As LongPtr
 Public Declare PtrSafe Function IoAttachDeviceToDeviceStackSafe Lib "ntoskrnl.exe" (SourceDevice As DEVICE_OBJECT, TargetDevice As DEVICE_OBJECT, AttachedToDeviceObject As LongPtr) As NTSTATUS
@@ -4875,7 +5091,7 @@ Public Declare PtrSafe Function IoThreadToProcess Lib "ntoskrnl.exe" (ByVal Thre
 Public Declare PtrSafe Function IoGetRequestorProcess Lib "ntoskrnl.exe" (Irp As IRP) As LongPtr 'PEPROCESS
 Public Declare PtrSafe Function IoGetTopLevelIrp Lib "ntoskrnl.exe" () As LongPtr 'PIRP
 
-Public Declare PtrSafe Function IofCallDriver Lib "ntoskrnl.exe" (DeviceObject As DEVICE_OBJECT, pIrp As IRP) As Long
+Public Declare PtrSafe Function IofCallDriver FastCall Lib "ntoskrnl.exe" (DeviceObject As DEVICE_OBJECT, pIrp As IRP) As Long
 
 Public Declare PtrSafe Function PsGetProcessId Lib "ntoskrnl.exe" (ByVal Process As LongPtr) As LongPtr
 Public Declare PtrSafe Function PsGetCurrentProcess Lib "ntoskrnl.exe" Alias "IoGetCurrentProcess" () As LongPtr
@@ -4893,18 +5109,17 @@ Public Declare PtrSafe Function PsRemoveCreateThreadNotifyRoutine Lib "ntoskrnl.
 Public Declare PtrSafe Function PsSetLoadImageNotifyRoutine Lib "ntoskrnl.exe" (ByVal NotifyRoutine As LongPtr) As NTSTATUS
 Public Declare PtrSafe Function PsRemoveLoadImageNotifyRoutine Lib "ntoskrnl.exe" (ByVal NotifyRoutine As LongPtr) As NTSTATUS
 
-[UseGetLastError(False)] Public Declare PtrSafe Function RtlGetCurrentPeb Lib "ntoskrnl.exe" () As LongPtr
 Public Declare PtrSafe Function RtlGetVersion Lib "ntoskrnl.exe" (lpVersionInformation As Any) As Long
 Public Declare PtrSafe Sub RtlInitUnicodeString Lib "ntoskrnl.exe" (DestinationString As UNICODE_STRING, ByVal SourceString As LongPtr)
 Public Declare PtrSafe Sub RtlCopyUnicodeString Lib "ntoskrnl.exe" (DestinationString As Any, SourceString As UNICODE_STRING)
 Public Declare PtrSafe Function RtlAppendUnicodeStringToString Lib "ntoskrnl.exe" (Destination As UNICODE_STRING, Source As UNICODE_STRING) As NTSTATUS
 Public Declare PtrSafe Function RtlAppendUnicodeToString Lib "ntoskrnl.exe" (Destination As UNICODE_STRING, Source As Any) As NTSTATUS
 Public Declare PtrSafe Function RtlUpcaseUnicodeString Lib "ntoskrnl.exe" (DestinationString As UNICODE_STRING, SourceString As UNICODE_STRING, ByVal AllocateDestinationString As Byte) As Long
-[UseGetLastError(False)] Public Declare PtrSafe Function RtlCompareUnicodeStrings Lib "ntdll" (ByVal String1 As LongPtr, ByVal String2 As LongPtr, ByVal CaseInSensitive As CBoolean) As Long
+[UseGetLastError(False)] Public Declare PtrSafe Function RtlCompareUnicodeStrings Lib "ntoskrnl.exe" (ByVal String1 As LongPtr, ByVal String1Length As LongPtr, ByVal String2 As LongPtr, ByVal String2Length As LongPtr, ByVal CaseInSensitive As CBoolean) As Long
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlCompareUnicodeString Lib "ntoskrnl.exe" (String1 As UNICODE_STRING, String2 As UNICODE_STRING, ByVal CaseInSensitive As Byte) As Long
 Public Declare PtrSafe Function RtlEqualUnicodeString Lib "ntoskrnl.exe" (String1 As UNICODE_STRING, String2 As UNICODE_STRING, ByVal CaseInSensitive As Byte) As Byte
 Public Declare PtrSafe Sub RtlFreeUnicodeString Lib "ntoskrnl.exe" (UnicodeString As UNICODE_STRING)
-[UseGetLastError(False)] Public DeclareWide PtrSafe Function RtlDuplicateUnicodeString Lib "ntdll" (ByVal Flags As RtlDupUnicodeStrFlags, StringIn As UNICODE_STRING, StringOut As UNICODE_STRING) As NTSTATUS
+[UseGetLastError(False)] Public DeclareWide PtrSafe Function RtlDuplicateUnicodeString Lib "ntoskrnl.exe" (ByVal Flags As RtlDupUnicodeStrFlags, StringIn As UNICODE_STRING, StringOut As UNICODE_STRING) As NTSTATUS
 
 
 Public Enum RtlDupUnicodeStrFlags
@@ -4913,12 +5128,8 @@ RTL_DUPLICATE_UNICODE_STRING_ALLOCATE_NULL_STRING = (&H00000002)
 End Enum
 
 Public Declare PtrSafe Function RtlQueryRegistryValues Lib "ntoskrnl.exe" (ByVal RelativeTo As Long, ByVal Path As LongPtr, QueryTable As RTL_QUERY_REGISTRY_TABLE, ByVal Context As LongPtr, ByVal Environment As LongPtr) As Long
-Public Declare PtrSafe Sub RtlAcquirePebLock Lib "ntoskrnl.exe" ()
-Public Declare PtrSafe Sub RtlReleasePebLock Lib "ntoskrnl.exe" ()
 Public Declare PtrSafe Function RtlNtStatusToDosError Lib "ntoskrnl.exe" (ByVal ntStatus As NTSTATUS) As Long
 Public Declare PtrSafe Function RtlFindExportedRoutineByName Lib "ntoskrnl.exe" (ByVal DllBase As LongPtr, ByVal RoutineName As LongPtr) As LongPtr
-[Description("Generates a uniform random number using D.H. Lehmer's 1948 algorithm.")]
-Public Declare PtrSafe Function RtlUniform Lib "ntoskrnl.exe" (Seed As Long) As Long
 Public Declare PtrSafe Sub CopyMemory Lib "ntoskrnl.exe" Alias "RtlMoveMemory" (Destination As Any, Source As Any, ByVal Length As LongPtr)
 Public Declare PtrSafe Sub ZeroMemory Lib "ntoskrnl.exe" Alias "RtlZeroMemory" (Destination As Any, ByVal Length As LongPtr)
 Public Declare PtrSafe Function CompareMemory Lib "ntoskrnl.exe" Alias "RtlCompareMemory" (Source1 As Any, Source2 As Any, ByVal Length As LongPtr) As LongPtr
@@ -4930,18 +5141,13 @@ Public Declare PtrSafe Function CompareMemory Lib "ntoskrnl.exe" Alias "RtlCompa
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlFreeHeap Lib "ntoskrnl.exe" (ByVal HeapHandle As LongPtr, ByVal Flags As HeapFlags, ByVal BaseAddress As LongPtr) As Long
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlDestroyHeap Lib "ntoskrnl.exe" (ByVal HeapHandle As LongPtr) As LongPtr
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlValidSid Lib "ntoskrnl.exe" (ByVal Sid As LongPtr) As Byte
-[UseGetLastError(False)] Public Declare PtrSafe Function RtlEqualSid Lib "ntoskrnl.exe" (ByVal Sid1 As LongPtr, ByVal Sid2 As LongPtr) As Byte
-[UseGetLastError(False)] Public Declare PtrSafe Function RtlEqualPrefixSid Lib "ntoskrnl.exe" (ByVal Sid1 As LongPtr, ByVal Sid2 As LongPtr) As Byte
-[UseGetLastError(False)] Public Declare PtrSafe Function RtlAllocateAndInitializeSid Lib "ntoskrnl.exe" (IdentifierAuthority As SID_IDENTIFIER_AUTHORITY, ByVal SubAuthorityCount As Byte, ByVal SubAuthority0 As Long, ByVal SubAuthority1 As Long, ByVal SubAuthority2 As Long, ByVal SubAuthority3 As Long, ByVal SubAuthority4 As Long, ByVal SubAuthority5 As Long, ByVal SubAuthority6 As Long, ByVal SubAuthority7 As Long, psid As LongPtr) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlFreeSid Lib "ntoskrnl.exe" (ByVal psid As LongPtr) As LongPtr
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlInitializeSid Lib "ntoskrnl.exe" (ByVal Sid As LongPtr, IdentifierAuthority As SID_IDENTIFIER_AUTHORITY, ByVal SubAuthorityCount As Byte) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlInitializeSidEx CDecl Lib "ntoskrnl.exe" (ByVal Sid As LongPtr, IdentifierAuthority As SID_IDENTIFIER_AUTHORITY, ByVal SubAuthorityCount As Byte, ByVal ParamArray vargs As Any()) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function RtlCreateServiceSid Lib "ntoskrnl.exe" (ServiceName As UNICODE_STRING, ByVal ServiceSid As LongPtr, ServiceSidLength As Long) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlDeriveCapabilitySidsFromName Lib "ntoskrnl.exe" (UnicodeString As UNICODE_STRING, ByVal CapabilityGroupSid As LongPtr, ByVal CapabilitySid As LongPtr) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlIsElevatedRid Lib "ntoskrnl.exe" (SidAttr As SID_AND_ATTRIBUTES) As Byte
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlSidHashLookup Lib "ntoskrnl.exe" (SidAttrHash As SID_AND_ATTRIBUTES_HASH, ByVal Sid As LongPtr) As LongPtr
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlSidHashInitialize Lib "ntoskrnl.exe" (SidAttr As SID_AND_ATTRIBUTES, ByVal SidCount As Long, SidAttrHash As SID_AND_ATTRIBUTES_HASH) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function RtlDefaultNpAcl Lib "ntoskrnl.exe" (Acl As LongPtr) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlCreateSecurityDescriptor Lib "ntoskrnl.exe" (SecurityDescriptor As SECURITY_DESCRIPTOR, ByVal Revision As Long) As NTSTATUS
 Public Declare PtrSafe Function RtlValidSecurityDescriptor Lib "ntoskrnl.exe" (SecurityDescriptor As SECURITY_DESCRIPTOR) As Byte
 Public Declare PtrSafe Function RtlLengthSecurityDescriptor Lib "ntoskrnl.exe" (SecurityDescriptor As SECURITY_DESCRIPTOR) As Long
@@ -4969,9 +5175,13 @@ Public Declare PtrSafe Function RtlIsNameLegalDOS8Dot3 Lib "ntoskrnl.exe" (Name 
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlFindMostSignificantBit Lib "ntoskrnl.exe" (ByVal Set As LongLong) As Byte
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlFindLeastSignificantBit Lib "ntoskrnl.exe" (ByVal Set As LongLong) As Byte
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlFindClearRuns Lib "ntoskrnl.exe" (BitmapHeader As RTL_BITMAP, RunArray As RTL_BITMAP_RUN, ByVal SizeOfRunArray As Long, ByVal LocateLongestRuns As Byte) As Long
-[UseGetLastError(False)] Public Declare PtrSafe Function RtlFindLongestRunClear Lib "ntoskrnl.exe" (BitmapHeader As RTL_BITMAP, ByVal StartingIndex As Long) As Long
-[UseGetLastError(False)] Public Declare PtrSafe Function RtlFindFirstRunClear Lib "ntoskrnl.exe" (BitmapHeader As RTL_BITMAP, ByVal StartingIndex As Long) As Long
-[UseGetLastError(False)] Public Declare PtrSafe Function RtlCheckBit Lib "ntoskrnl.exe" (BitmapHeader As RTL_BITMAP, ByVal BitPosition As Long) As Byte
+[UseGetLastError(False)] Public Declare PtrSafe Function RtlFindLongestRunClear Lib "ntoskrnl.exe" (BitmapHeader As RTL_BITMAP, StartingIndex As Long) As Long
+[UseGetLastError(False)] Public Declare PtrSafe Function RtlFindFirstRunClear Lib "ntoskrnl.exe" (BitmapHeader As RTL_BITMAP, StartingIndex As Long) As Long
+Public Function RtlCheckBit(BitmapHeader As RTL_BITMAP, ByVal BitPosition As Long) As Byte
+    Dim v As Long
+    CopyMemory v, ByVal BitmapHeader.Buffer + ((BitPosition >> 5) << 2), 4
+    Return (v >> (BitPosition And 31)) And 1
+End Function
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlNumberOfClearBits Lib "ntoskrnl.exe" (BitmapHeader As RTL_BITMAP) As Long
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlNumberOfSetBits Lib "ntoskrnl.exe" (BitmapHeader As RTL_BITMAP) As Long
 [UseGetLastError(False)] Public Declare PtrSafe Function RtlAreBitsClear Lib "ntoskrnl.exe" (BitmapHeader As RTL_BITMAP, ByVal StartingIndex As Long, ByVal Length As Long) As Byte
@@ -4999,16 +5209,23 @@ Public Declare PtrSafe Function ExGetPreviousMode Lib "ntoskrnl.exe" () As KPROC
 Public Declare PtrSafe Function ExAllocatePoolWithTag Lib "ntoskrnl.exe" (ByVal PoolType As POOL_TYPE, ByVal NumberOfBytes As LongPtr, ByVal Tag As Long) As LongPtr
 Public Declare PtrSafe Sub ExFreePoolWithTag Lib "ntoskrnl.exe" (ByVal P As LongPtr, ByVal Tag As Long)
 Public Declare PtrSafe Function ExAllocatePoolWithTagPriority Lib "ntoskrnl.exe" (ByVal PoolType As POOL_TYPE, ByVal NumberOfBytes As LongPtr, ByVal Tag As Long, ByVal Priority As EX_POOL_PRIORITY) As LongPtr
-Public Declare PtrSafe Function ExAllocatePool2 Lib "ntoskrnl.exe" (ByVal PoolType As POOL_TYPE, ByVal NumberOfBytes As LongPtr, ByVal Tag As Long) As LongPtr
-Public Declare PtrSafe Function ExAllocatePool3 Lib "ntoskrnl.exe" (ByVal PoolType As POOL_TYPE, ByVal NumberOfBytes As LongPtr, ByVal Tag As Long, ExtendedParameters as POOL_EXTENDED_PARAMETER, ByVal ExtendedParametersCount As Long) As LongPtr
+Public Declare PtrSafe Function ExAllocatePool2 Lib "ntoskrnl.exe" (ByVal Flags As POOL_FLAGS, ByVal NumberOfBytes As LongPtr, ByVal Tag As Long) As LongPtr
+Public Declare PtrSafe Function ExAllocatePool3 Lib "ntoskrnl.exe" (ByVal Flags As POOL_FLAGS, ByVal NumberOfBytes As LongPtr, ByVal Tag As Long, ExtendedParameters As POOL_EXTENDED_PARAMETER, ByVal ExtendedParametersCount As Long) As LongPtr
+[Description("Not available on Windows 10")]
 Public Declare PtrSafe Sub ExFreePool2 Lib "ntoskrnl.exe" (ByVal P As LongPtr, ByVal Tag As Long, ExtendedParameters As POOL_EXTENDED_PARAMETER, ByVal ExtendedParametersCount As Long)
-Public Declare PtrSafe Sub ExAcquireFastMutex Lib "ntoskrnl.exe" (FastMutex As FAST_MUTEX)
-Public Declare PtrSafe Sub ExReleaseFastMutex Lib "ntoskrnl.exe" (FastMutex As FAST_MUTEX)
-Public Declare PtrSafe Sub ExTryToAcquireFastMutex Lib "ntoskrnl.exe" (FastMutex As FAST_MUTEX)
+#If Win64 Then
+Public Declare PtrSafe Sub ExAcquireFastMutex FastCall Lib "ntoskrnl.exe" (FastMutex As FAST_MUTEX)
+Public Declare PtrSafe Sub ExReleaseFastMutex FastCall Lib "ntoskrnl.exe" (FastMutex As FAST_MUTEX)
+Public Declare PtrSafe function ExTryToAcquireFastMutex FastCall Lib "ntoskrnl.exe" (FastMutex As FAST_MUTEX) As CBoolean
+#Else
+Public Declare PtrSafe Sub ExAcquireFastMutex FastCall Lib "hal.dll" (FastMutex As FAST_MUTEX)
+Public Declare PtrSafe Sub ExReleaseFastMutex FastCall Lib "hal.dll" (FastMutex As FAST_MUTEX)
+Public Declare PtrSafe function ExTryToAcquireFastMutex FastCall Lib "hal.dll" (FastMutex As FAST_MUTEX) As CBoolean
+#End If
 Public Declare PtrSafe Function ExRaiseHardError Lib "ntoskrnl.exe" (ByVal ErrorStatus As NTSTATUS, ByVal NumberOfParameters As Long, ByVal UnicodeStringParametersMask As Long, Parameters As Any, ByVal ValidResponseOptions As HARDERROR_RESPONSE_OPTION, Response As HARDERROR_RESPONSE) As NTSTATUS
 Public Declare PtrSafe Sub ExRaiseStatus Lib "ntoskrnl.exe" (ByVal Status As NTSTATUS)
 Public Declare PtrSafe Function ExInterlockedAddLargeInteger Lib "ntoskrnl.exe" (Addend As LongLong, ByVal Value As LongLong, Lock As LongPtr) As LongLong
-Public Declare PtrSafe Function ExInterlockedAddUlong Lib "ntoskrnl.exe" (Addend As Long, ByVal Value As Long, Lock As LongPtr) As Long
+Public Declare PtrSafe Function ExInterlockedAddUlong FastCall Lib "ntoskrnl.exe" (Addend As Long, ByVal Value As Long, Lock As LongPtr) As Long
 Public Declare PtrSafe Function ExInitializeResourceLite Lib "ntoskrnl.exe" (Resource As ERESOURCE) As NTSTATUS
 Public Declare PtrSafe Function ExReinitializeResourceLite Lib "ntoskrnl.exe" (Resource As ERESOURCE) As NTSTATUS
 Public Declare PtrSafe Function ExAcquireResourceSharedLite Lib "ntoskrnl.exe" (Resource As ERESOURCE, ByVal Wait As Byte) As Byte
@@ -5018,7 +5235,7 @@ Public Declare PtrSafe Function ExEnterCriticalRegionAndAcquireResourceExclusive
 Public Declare PtrSafe Function ExAcquireSharedStarveExclusive Lib "ntoskrnl.exe" (Resource As ERESOURCE, ByVal Wait As Byte) As Byte
 Public Declare PtrSafe Function ExAcquireSharedWaitForExclusive Lib "ntoskrnl.exe" (Resource As ERESOURCE, ByVal Wait As Byte) As Byte
 Public Declare PtrSafe Function ExEnterCriticalRegionAndAcquireSharedWaitForExclusive Lib "ntoskrnl.exe" (Resource As ERESOURCE) As LongPtr
-Public Declare PtrSafe Sub ExReleaseResourceAndLeaveCriticalRegion Lib "ntoskrnl.exe" (Resource As ERESOURCE)
+Public Declare PtrSafe Sub ExReleaseResourceAndLeaveCriticalRegion FastCall Lib "ntoskrnl.exe" (Resource As ERESOURCE)
 Public Declare PtrSafe Sub ExReleaseResourceForThreadLite Lib "ntoskrnl.exe" (Resource As ERESOURCE, ByVal ResourceThreadId As LongPtr)
 Public Declare PtrSafe Sub ExSetResourceOwnerPointer Lib "ntoskrnl.exe" (Resource As ERESOURCE, ByVal OwnerPointer As LongPtr)
 Public Declare PtrSafe Function ExDeleteResourceLite Lib "ntoskrnl.exe" (Resource As ERESOURCE) As NTSTATUS
@@ -5035,42 +5252,66 @@ Public Sub ExReleaseResource(Resource As ERESOURCE): ExReleaseResourceLite(Resou
 Public Sub InterlockedIncrement(Addend As Long)
     Dim pksl As LongPtr, irql As KIRQL
     KeInitializeSpinLock pksl
-    irql = KeAcquireSpinLock(pksl)
+    ' irql = KeAcquireSpinLock(pksl)
     ExInterlockedAddUlong(Addend, 1, pksl)
     KeReleaseSpinLock pksl, irql
 End Sub
 #Else
-Public Declare PtrSafe Function InterlockedIncrement Lib "ntoskrnl.exe" (Addend As Long) As Long
+Public Declare PtrSafe Function InterlockedIncrement FastCall Lib "ntoskrnl.exe" (Addend As Long) As Long
 #End If
 
-Public Declare PtrSafe Sub ExInitializeNPagedLookasideList Lib "ntoskrnl.exe" (Lookaside As LongPtr, ByVal Allocate As LongPtr, ByVal Free As LongPtr, ByVal Flags As Long, ByVal Size As LongPtr, ByVal Tag As Long, ByVal Depth As Integer)
+Public Declare PtrSafe Sub ExInitializeNPagedLookasideList Lib "ntoskrnl.exe" (Lookaside As NPAGED_LOOKASIDE_LIST, ByVal Allocate As LongPtr, ByVal Free As LongPtr, ByVal Flags As Long, ByVal Size As LongPtr, ByVal Tag As Long, ByVal Depth As Integer)
+Public Declare PtrSafe Sub ExDeleteNPagedLookasideList Lib "ntoskrnl.exe" (Lookaside As NPAGED_LOOKASIDE_LIST)
 #If Win64 Then
 Public Declare PtrSafe Function InterlockedPopEntrySList Lib "ntoskrnl.exe" Alias "ExpInterlockedPopEntrySList" (ByVal ListHead As LongPtr) As LongPtr
 #Else
-Public Declare PtrSafe Function InterlockedPopEntrySList Lib "ntoskrnl.exe" (ByVal ListHead As LongPtr) As LongPtr
+Public Declare PtrSafe Function InterlockedPopEntrySList FastCall Lib "ntoskrnl.exe" (ByVal ListHead As LongPtr) As LongPtr
 #End If
 
 
-Public Declare PtrSafe Function KeGetCurrentIrql Lib "ntoskrnl.exe" () As KIRQL
-Public Declare PtrSafe Function KeRaiseIrqlToDpcLevel Lib "ntoskrnl.exe" () As Byte
 Public Declare PtrSafe Sub KeInitializeEvent Lib "ntoskrnl.exe" (Event As KEVENT, ByVal Type As EVENT_TYPE, ByVal State As Byte)
 Public Declare PtrSafe Function KeSetEvent Lib "ntoskrnl.exe" (Event As KEVENT, ByVal Increment As Long, ByVal Wait As Byte) As Long
 Public Declare PtrSafe Function KeWaitForSingleObject Lib "ntoskrnl.exe" (Object As Any, ByVal WaitReason As KWAIT_REASON, ByVal WaitMode As Byte, ByVal Alertable As Byte, ByVal Timeout As LongPtr /*PLARGE_INTEGER*/) As Long
 Public Declare PtrSafe Function KeInitializeSpinLock Lib "ntoskrnl.exe" (SpinLock As LongPtr) As Long
-Public Declare PtrSafe Function KeAcquireSpinLock Lib "ntoskrnl.exe" Alias "KeAcquireSpinLockRaiseToDpc" (SpinLock As LongPtr) As KIRQL
-Public Declare PtrSafe Sub KeReleaseSpinLock Lib "ntoskrnl.exe" (SpinLock As LongPtr, [TypeHint(eKIRQL)] ByVal NewIrql As KIRQL)
-Public Declare PtrSafe Function KfRaiseIrql FastCall Lib "ntoskrnl.exe" ([TypeHint(eKIRQL)] ByVal NewIrql As KIRQL) As KIRQL
 Public Sub KeRaiseIrql([TypeHint(eKIRQL)] ByVal NewIrql As KIRQL, OldIrql As KIRQL)
     OldIrql = KfRaiseIrql(NewIrql)
 End Sub
 #If Win64 Then
+Public Declare PtrSafe Function KeGetCurrentIrql Lib "ntoskrnl.exe" () As KIRQL
+Public Declare PtrSafe Function KeRaiseIrqlToDpcLevel Lib "ntoskrnl.exe" () As Byte
+Public Declare PtrSafe Sub KeReleaseSpinLock Lib "ntoskrnl.exe" (SpinLock As LongPtr, [TypeHint(eKIRQL)] ByVal NewIrql As KIRQL)
+Public Declare PtrSafe Function KfRaiseIrql FastCall Lib "ntoskrnl.exe" ([TypeHint(eKIRQL)] ByVal NewIrql As KIRQL) As KIRQL
 Public Declare PtrSafe Sub KeLowerIrql FastCall Lib "ntoskrnl.exe" ([TypeHint(eKIRQL)] ByVal NewIrql As KIRQL)
+Public Declare PtrSafe Function KeAcquireSpinLockRaiseToDpc Lib "ntoskrnl.exe" (SpinLock As LongPtr) As KIRQL
+public function KeAcquireSpinLock(SpinLock as longptr) as kirql
+    return KeAcquireSpinLockRaiseToDpc(SpinLock)
+End Function
 #Else
-[Unimplemented, Description("UNSUPPORTED on x86 - Uses __fastcall calling convention.")]
-Public Declare PtrSafe Sub KfLowerIrql Lib "ntoskrnl.exe" ([TypeHint(eKIRQL)] ByVal NewIrql As KIRQL)
+Public Declare PtrSafe Function KeGetCurrentIrql Lib "hal.dll" () As KIRQL
+Public Declare PtrSafe Function KeRaiseIrqlToDpcLevel Lib "hal.dll" () As Byte
+Public Declare PtrSafe Sub KeReleaseSpinLock Lib "hal.dll" (SpinLock As LongPtr, [TypeHint(eKIRQL)] ByVal NewIrql As KIRQL)
+Public Declare PtrSafe Function KfRaiseIrql FastCall Lib "hal.dll" ([TypeHint(eKIRQL)] ByVal NewIrql As KIRQL) As KIRQL
+Public Declare PtrSafe Sub KfLowerIrql FastCall Lib "hal.dll" ([TypeHint(eKIRQL)] ByVal NewIrql As KIRQL)
+Public Declare PtrSafe Sub KeLowerIrql FastCall Lib "ntoskrnl.exe" Alias "KfLowerIrql" ([TypeHint(eKIRQL)] ByVal NewIrql As KIRQL)
+Public Declare PtrSafe Function KeAcquireSpinLock Lib "hal.dll" Alias "KfAcquireSpinLock" (SpinLock As LongPtr) As KIRQL
  
 #End If
+#If Win64 Then
+    Public const KI_USER_SHARED_DATA as LongPtr = &HFFFFF78000000000^
+#Else
+    Public const KI_USER_SHARED_DATA as longptr = &Hffdf0000&
+#End If
+Public Const SharedInterruptTime  = (KI_USER_SHARED_DATA + &H8)
+Public Const SharedSystemTime  = (KI_USER_SHARED_DATA + &H14)
+Public Const SharedTickCount  = (KI_USER_SHARED_DATA + &H320)
+
+#If Win64 Then
+Public Sub KeQuerySystemTime(CurrentTime As LARGE_INTEGER)
+CurrentTime.QuadPart = CType(Of LARGE_INTEGER)(SharedSystemTime).QuadPart
+End Sub
+#Else
 Public Declare PtrSafe Sub KeQuerySystemTime Lib "ntoskrnl.exe" (CurrentTime As LARGE_INTEGER)
+#End If
 Public Declare PtrSafe Sub KeQuerySystemTimePrecise Lib "ntoskrnl.exe" (CurrentTime As LARGE_INTEGER)
 Public Declare PtrSafe Function KeSetPriorityThread Lib "ntoskrnl.exe" (ByVal Thread As LongPtr, ByVal Priority As KPRIORITY) As KPRIORITY
 Public Declare PtrSafe Function KeDelayExecutionThread Lib "ntoskrnl.exe" ([TypeHint(eKPROCESSOR_MODE)] ByVal WaitMode As KPROCESSOR_MODE, ByVal Alertable As CBoolean, Interval As LARGE_INTEGER) As NTSTATUS
@@ -5101,7 +5342,7 @@ Public Function SeQuerySubjectContextToken(SubjectContext As SECURITY_SUBJECT_CO
 End Function
 Public Declare PtrSafe Function SeQueryInformationToken Lib "ntoskrnl.exe" (ByVal Token as LongPtr, ByVal TokenInformationClass as TOKEN_INFORMATION_CLASS, TokenInformation as Any) as NTSTATUS
 [Description("Returns the full path of a process given an EPROCESS pointer.")]
-Public Declare PtrSafe Function SeLocateProcessImageName Lib "ntoskrnl.exe" (ByVal Process As LongPtr, ImageFileName As UNICODE_STRING) As NTSTATUS
+Public Declare PtrSafe Function SeLocateProcessImageName Lib "ntoskrnl.exe" (ByVal Process As LongPtr, ImageFileName As LongPtr) As NTSTATUS
 Public Declare PtrSafe Function SeAssignSecurity Lib "ntoskrnl.exe" (ByVal ParentDescriptor as LongPtr, ByVal ExplicitDescriptor as LongPtr, NewDescriptor as LongPtr, ByVal IsDirectoryObject as Byte,SubjectContext As SECURITY_SUBJECT_CONTEXT, GenericMapping as GENERIC_MAPPING, ByVal PoolType as POOL_TYPE) as NTSTATUS
 Public Declare PtrSafe Function SeComputeAutoInheritByObjectType Lib "ntoskrnl.exe" (ByVal ObjectType as LongPtr, Optional ByVal SecurityDescriptor as LongPtr = 0, Optional ByVal ParentSecurityDescriptor As LongPtr = 0) As Long
 Public Declare PtrSafe Function SeAssignSecurityEx Lib "ntoskrnl.exe" (ByVal ParentDescriptor as LongPtr, ByVal ExplicitDescriptor as LongPtr, NewDescriptor as LongPtr, ObjectType as UUID,  ByVal IsDirectoryObject as Byte, ByVal AutoInheritFlags as SEF_FLAGS, SubjectContext As SECURITY_SUBJECT_CONTEXT, GenericMapping As GENERIC_MAPPING, ByVal PoolType As POOL_TYPE) As NTSTATUS
@@ -5115,17 +5356,15 @@ Public Declare PtrSafe Function MmIsAddressValid Lib "ntoskrnl.exe" (ByVal Virtu
 Public Declare PtrSafe Function MmGetSystemRoutineAddress Lib "ntoskrnl.exe" (SystemRoutineName As UNICODE_STRING) As LongPtr
 Public Declare PtrSafe Function MmMapLockedPagesSpecifyCache Lib "ntoskrnl.exe" (ByVal MemoryDescriptorList As LongPtr, [TypeHint(eKPROCESSOR_MODE)] ByVal AccessMode As KPROCESSOR_MODE, ByVal CacheType As MEMORY_CACHING_TYPE, ByVal RequestedAddress As LongPtr, ByVal BugCheckOnFailure As Long, [TypeHint(MM_PAGE_PRIORITY, MdlMappingFlags)] ByVal Priority As Long) As LongPtr
 
-Public Declare PtrSafe Function ZwCreateUserProcess Lib "ntoskrnl.exe" (ProcessHandle As LongPtr, ThreadHandle As LongPtr, [TypeHint(ProcessAccessRights, StandardAccessTypes)] ByVal ProcessDesiredAccess As Long, [TypeHint(ThreadAccessRights, StandardAccessTypes)] ByVal ThreadDesiredAccess As Long, _
+Public Declare PtrSafe Function ZwCreateUserProcess Lib "ntoskrnl.exe" Alias "#2" (ProcessHandle As LongPtr, ThreadHandle As LongPtr, [TypeHint(ProcessAccessRights, StandardAccessTypes)] ByVal ProcessDesiredAccess As Long, [TypeHint(ThreadAccessRights, StandardAccessTypes)] ByVal ThreadDesiredAccess As Long, _
                                                                     ProcessObjectAttributes As OBJECT_ATTRIBUTES, ThreadObjectAttributes As OBJECT_ATTRIBUTES, ByVal ProcessFlags As PROCESS_CREATE_FLAGS, ByVal ThreadFlags As THREAD_CREATE_FLAGS, ProcessParameters As Any, CreateInfo As PS_CREATE_INFO, AttributeList As PS_ATTRIBUTE_LIST) As NTSTATUS
 Public Declare PtrSafe Function ZwCreateFile Lib "ntoskrnl.exe" (FileHandle As LongPtr, [TypeHint(GenericRights, FileAccessRights)] ByVal DesiredAccess As Long, ObjectAttributes As OBJECT_ATTRIBUTES, IoStatusBlock As IO_STATUS_BLOCK, AllocationSize As Any, ByVal FileAttributes As FILE_ATTRIBUTES, ByVal ShareAccess As FileShareMode, ByVal CreateDisposition As FileCreateDisposition, ByVal CreateOptions As FileAccessFlags, EaBuffer As Any, ByVal EaLength As Long) As NTSTATUS
 Public Declare PtrSafe Function ZwClose Lib "ntoskrnl.exe" (ByVal Handle As LongPtr) As NTSTATUS
 Public Declare PtrSafe Function ZwOpenProcess Lib "ntoskrnl.exe" (ProcessHandle As LongPtr, [TypeHint(ProcessAccessRights, StandardAccessTypes)] ByVal DesiredAccess As Long, ObjectAttributes As OBJECT_ATTRIBUTES, ClientID As CLIENT_ID) As Long
-Public Declare PtrSafe Function ZwSuspendProcess Lib "ntoskrnl.exe" (ByVal hProcess As LongPtr) As Long
-Public Declare PtrSafe Function ZwResumeProcess Lib "ntoskrnl.exe" (ByVal hProcess As LongPtr) As Long
-Public Declare PtrSafe Function ZwDuplicateObject Lib "ntoskrnl.exe" (ByVal SourceProcessHandle As LongPtr, ByVal SourceHandle As LongPtr, pTargetHandle As LongPtr, ByVal DesiredAccess As Long, ByVal HandleAttributes As ObjectAttributeValues, ByVal Options As DuplicateObjectOptions) As Long
+Public Declare PtrSafe Function ZwDuplicateObject Lib "ntoskrnl.exe" (ByVal SourceProcessHandle As LongPtr, ByVal SourceHandle As LongPtr, ByVal TargetProcessHandle As LongPtr, pTargetHandle As LongPtr, ByVal DesiredAccess As Long, ByVal HandleAttributes As ObjectAttributeValues, ByVal Options As DuplicateObjectOptions) As Long
 Public Declare PtrSafe Function ZwOpenSymbolicLinkObject Lib "ntoskrnl.exe" (LinkHandle As LongPtr, [TypeHint(GenericRights, StandardAccessTypes)] ByVal DesiredAccess As Long, ObjectAttributes As OBJECT_ATTRIBUTES) As NTSTATUS
 Public Declare PtrSafe Function ZwQuerySymbolicLinkObject Lib "ntoskrnl.exe" (ByVal LinkHandle As LongPtr, LinkTarget As UNICODE_STRING, ReturnedLength As Long) As NTSTATUS
-Public Declare PtrSafe Function ZwMapViewOfSection Lib "ntoskrnl.exe" (ByVal SectionHandle As LongPtr, ByVal ProcessHandle As LongPtr, BaseAddress As LongPtr, ByVal ZeroBits As LongPtr, ByVal CommitSize As LongPtr, SectionOffset As LARGE_INTEGER, ViewSize As LongPtr, ByVal AllocationType As MemAllocType, ByVal Win32Protect As MemProtectFlags) As NTSTATUS
+Public Declare PtrSafe Function ZwMapViewOfSection Lib "ntoskrnl.exe" (ByVal SectionHandle As LongPtr, ByVal ProcessHandle As LongPtr, BaseAddress As LongPtr, ByVal ZeroBits As LongPtr, ByVal CommitSize As LongPtr, SectionOffset As LARGE_INTEGER, ViewSize As LongPtr, byval InheritDisposition As SECTION_INHERIT, ByVal AllocationType As MemAllocType, ByVal Win32Protect As MemProtectFlags) As NTSTATUS
 Public Declare PtrSafe Function ZwUnmapViewOfSection Lib "ntoskrnl.exe" (ByVal ProcessHandle As LongPtr, Optional ByVal BaseAddress As LongPtr) As NTSTATUS
 Public Declare PtrSafe Function ZwOpenSection Lib "ntoskrnl.exe" (SectionHandle As LongPtr, [TypeHint(StandardAccessTypes, NTSectionAccessRights, GenericRights)] ByVal DesiredAccess As Long, ObjectAttributes As OBJECT_ATTRIBUTES) As NTSTATUS
 Public Declare PtrSafe Function ZwCreateSection Lib "ntoskrnl.exe" (SectionHandle As LongPtr, [TypeHint(StandardAccessTypes, NTSectionAccessRights)] ByVal DesiredAccess As Long, ObjectAttributes As OBJECT_ATTRIBUTES, MaximumSize As LARGE_INTEGER, ByVal SectionPageProtection As MemProtectFlags, ByVal AllocationAttributes As NTSectionFlags, Optional ByVal FileHandle As LongPtr) As NTSTATUS
@@ -5148,7 +5387,6 @@ Public Function ZwCurrentProcessToken() As LongPtr: Return (-4): End Function
 Public Function ZwCurrentThreadToken() As LongPtr: Return (-5): End Function
 Public Function ZwCurrentThreadEffectiveToken() As LongPtr: Return (-6): End Function
 
-Public Function ZwCurrentPeb() As LongPtr: Return RtlGetCurrentPeb(): End Function
 #If (TWINBASIC_BUILD >= 606) Then
 Public Function ZwCurrentTeb CDecl Naked() As LongPtr
     #If Win64 Then
@@ -5247,34 +5485,21 @@ End Enum
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwSetInformationKey Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr, ByVal KeySetInformationClass As KEY_SET_INFORMATION_CLASS, KeySetInformation As Any, ByVal KeySetInformationLength As Long) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwQueryValueKey Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr, ValueName As UNICODE_STRING, ByVal KeyValueInformationClass As KEY_VALUE_INFORMATION_CLASS, KeyValueInformation As Any, ByVal Length As Long, ResultLength As Long) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwSetValueKey Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr, ValueName As UNICODE_STRING, ByVal TitleIndex As Long, ByVal Type As REGTYPES, Data As Any, ByVal DataSize As Long) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwQueryMultipleValueKey Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr, ValueEntries As Any, ByVal EntryCount As Long, ValueBuffer As Any, BufferLength As Long, Optional RequiredBufferLength As Long) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwEnumerateKey Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr, ByVal Index As Long, ByVal KeyInformationClass As KEY_INFORMATION_CLASS, KeyInformation As Any, ByVal Length As Long, ResultLength As Long) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwEnumerateValueKey Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr, ByVal Index As Long, ByVal KeyValueInformationClass As KEY_VALUE_INFORMATION_CLASS, KeyValueInformation As Any, ByVal Length As Long, ResultLength As Long) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwFlushKey Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwCompactKeys Lib "ntoskrnl.exe" (ByVal Count As Long, KeyArray As LongPtr) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwCompressKey Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwLoadKey Lib "ntoskrnl.exe" (TargetKey As OBJECT_ATTRIBUTES, SourceFile As OBJECT_ATTRIBUTES) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwLoadKey2 Lib "ntoskrnl.exe" (TargetKey As OBJECT_ATTRIBUTES, SourceFile As OBJECT_ATTRIBUTES, ByVal Flags As RegKeyRestoreAndLoadHiveFlags) As NTSTATUS
 [Description("NOTE: This function existed prior to Vista but only had 4 arguments.")]
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwLoadKeyEx Lib "ntoskrnl.exe" (TargetKey As OBJECT_ATTRIBUTES, SourceFile As OBJECT_ATTRIBUTES, ByVal Flags As NtLoadKeyExFlags, ByVal TrustClassKey As LongPtr, ByVal Event As LongPtr, [TypeHint(REGSAM, StandardAccessTypes, GenericRights)] ByVal DesiredAccess As Long, RootHandle As LongPtr, ByVal Reserved As LongPtr) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwLoadKey3 Lib "ntoskrnl.exe" (TargetKey As OBJECT_ATTRIBUTES, SourceFile As OBJECT_ATTRIBUTES, ByVal Flags As RegKeyRestoreAndLoadHiveFlags, ExtendedParameters As CM_EXTENDED_PARAMETER, ByVal ExtendedParameterCount As Long, [TypeHint(REGSAM, StandardAccessTypes, GenericRights)] ByVal DesiredAccess As Long, RootHandle As LongPtr, ByVal Reserved As LongPtr) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwReplaceKey Lib "ntoskrnl.exe" (NewFile As OBJECT_ATTRIBUTES, ByVal TargetHandle As LongPtr, OldFile As OBJECT_ATTRIBUTES) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwSaveKey Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr, ByVal FileHandle As LongPtr) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwSaveKeyEx Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr, ByVal FileHandle As LongPtr, ByVal Format As RegSaveKeyFlags) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwSaveMergedKeys Lib "ntoskrnl.exe" (ByVal HighPrecedenceKeyHandle As LongPtr, ByVal LowPrecedenceKeyHandle As LongPtr, ByVal FileHandle As LongPtr) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwRestoreKey Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr, ByVal FileHandle As LongPtr, ByVal Flags As RegKeyRestoreAndLoadHiveFlags) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwUnloadKey Lib "ntoskrnl.exe" (TargetKey As OBJECT_ATTRIBUTES) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwUnloadKey2 Lib "ntoskrnl.exe" (TargetKey As OBJECT_ATTRIBUTES, ByVal Flags As RegUnloadFlags) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwUnloadKeyEx Lib "ntoskrnl.exe" (TargetKey As OBJECT_ATTRIBUTES, ByVal Event As LongPtr) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwNotifyChangeKey Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr, ByVal Event As LongPtr, ByVal ApcRoutine As LongPtr, ByVal ApcContext As LongPtr, IoStatusBlock As IO_STATUS_BLOCK, ByVal CompletionFilter As RegNotifyChangeValues, ByVal WatchTree As Byte, Buffer As Any, ByVal BufferSize As Long, ByVal Asynchronous As Byte) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwNotifyChangeMultipleKeys Lib "ntoskrnl.exe" (ByVal MasterKeyHandle As LongPtr, ByVal Count As Long, SubordinateObjects As OBJECT_ATTRIBUTES, ByVal Event As LongPtr, ByVal ApcRoutine As LongPtr, ByVal ApcContext As LongPtr, IoStatusBlock As IO_STATUS_BLOCK, ByVal CompletionFilter As RegNotifyChangeValues, ByVal WatchTree As Byte, Buffer As Any, ByVal BufferSize As Long, ByVal Asynchronous As Byte) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwQueryOpenSubKeys Lib "ntoskrnl.exe" (TargetKey As OBJECT_ATTRIBUTES, HandleCount As Long) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwQueryOpenSubKeysEx Lib "ntoskrnl.exe" (TargetKey As OBJECT_ATTRIBUTES, ByVal BufferLength As Long, Buffer As Any, RequiredSize As Long) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwInitializeRegistry Lib "ntoskrnl.exe" (ByVal BootCondition As Integer) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwLockRegistryKey Lib "ntoskrnl.exe" (ByVal KeyHandle As LongPtr) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwLockProductActivationKeys Lib "ntoskrnl.exe" (pPrivateVer As Long, pSafeMode As Long) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwFreezeRegistry Lib "ntoskrnl.exe" (ByVal TimeOutInSeconds As Long) As NTSTATUS
-[UseGetLastError(False)] Public Declare PtrSafe Function ZwThawRegistry Lib "ntoskrnl.exe" () As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwCreateRegistryTransaction Lib "ntoskrnl.exe" (RegistryTransactionHandle As LongPtr, [TypeHint(REGSAM, StandardAccessTypes, GenericRights)] ByVal DesiredAccess As Long, ObjAttributes As OBJECT_ATTRIBUTES, ByVal CreateOptions As Long) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwOpenRegistryTransaction Lib "ntoskrnl.exe" (RegistryTransactionHandle As LongPtr, [TypeHint(REGSAM, StandardAccessTypes, GenericRights)] ByVal DesiredAccess As Long, ObjAttributes As OBJECT_ATTRIBUTES) As NTSTATUS
 [UseGetLastError(False)] Public Declare PtrSafe Function ZwCommitRegistryTransaction Lib "ntoskrnl.exe" (ByVal RegistryTransactionHandle As LongPtr, ByVal Flags As Long) As NTSTATUS
@@ -5291,7 +5516,7 @@ Public Declare PtrSafe Function ObReferenceObjectByHandleWithTag Lib "ntoskrnl.e
 
 Public Declare PtrSafe Function ObReferenceObjectSafe FastCall Lib "ntoskrnl.exe" (ByVal Object As LongPtr) As CBoolean
 Public Declare PtrSafe Function ObReferenceObjectSafeWithTag FastCall Lib "ntoskrnl.exe" (ByVal Object As LongPtr, ByVal Tag As Long) As CBoolean
-Public Declare PtrSafe Function ObCloseHandle FastCall Lib "ntoskrnl.exe" (ByVal Handle As LongPtr, [TypeHint(eKPROCESSOR_MODE)] ByVal PreviousMode As KPROCESSOR_MODE) As NTSTATUS
+Public Declare PtrSafe Function ObCloseHandle Lib "ntoskrnl.exe" (ByVal Handle As LongPtr, [TypeHint(eKPROCESSOR_MODE)] ByVal PreviousMode As KPROCESSOR_MODE) As NTSTATUS
 Public Declare PtrSafe Function ObReferenceObject FastCall Lib "ntoskrnl.exe" Alias "ObfReferenceObject" (ByVal Object As LongPtr) As LongPtr
 Public Declare PtrSafe Function ObDereferenceObject FastCall Lib "ntoskrnl.exe" Alias "ObfDereferenceObject" (ByVal Object As LongPtr) As LongPtr
 Public Declare PtrSafe Function ObfReferenceObject FastCall Lib "ntoskrnl.exe" (ByVal Object As LongPtr) As LongPtr
@@ -5319,7 +5544,7 @@ Public Declare PtrSafe Function CmSetCallbackObjectContext Lib "ntoskrnl.exe" (B
 Public Declare PtrSafe Function CmCallbackGetKeyObjectID Lib "ntoskrnl.exe" (Cookie As LARGE_INTEGER, ByVal Object As LongPtr, ObjectId As LongPtr, ObjectName As LongPtr) as NTSTATUS
 Public Declare PtrSafe Function CmGetBoundTransaction Lib "ntoskrnl.exe" (Cookie As LARGE_INTEGER, ByVal Object As LongPtr) As LongPtr
 Public Declare PtrSafe Function CmCallbackGetKeyObjectIDEx Lib "ntoskrnl.exe" (Cookie As LARGE_INTEGER, ByVal Object As LongPtr, ObjectId As LongPtr, ObjectName As LongPtr, ByVal Flags As Long) As NTSTATUS
-Public Declare PtrSafe Sub CmCallbackReleaseKeyObjectIDEx Lib "ntoskrnl.exe" (ObjectName As UNICODE_STRING)
+Public Declare PtrSafe Sub CmCallbackReleaseKeyObjectIDEx Lib "ntoskrnl.exe" (byval ObjectName As LongPtr)
 
 
 
@@ -5439,10 +5664,34 @@ Public Function max(ByVal x As Long, ByVal y As Long) As Long: Return If(x > y, 
 Public Function NT_SUCCESS(ByVal Status As Long) As Boolean
     NT_SUCCESS = Status >= STATUS_SUCCESS
 End Function
-Public Function NT_ERROR(ByVal Status As Long) As Boolean
-    NT_ERROR = Status < &Hc0000000
+Public Function NT_INFORMATION([TypeHint(NTSTATUS)] ByVal Status As Long) As Boolean
+    Return ((CLngToULng(Status) >> 30^) = 1)
+End Function
+Public Function NT_WARNING([TypeHint(NTSTATUS)] ByVal Status As Long) As Boolean
+    Return ((CLngToULng(Status) >> 30^) = 2)
+End Function
+Public Function NT_ERROR([TypeHint(NTSTATUS)] ByVal Status As Long) As Boolean
+    Return ((CLngToULng(Status) >> 30^) = 3)
 End Function
 
+Public Function CULngToLng(ByVal Value As LongLong) As Long
+Const OFFSET_4 As LongLong = 4294967296^
+Const MAXINT_4 As Long = 2147483647
+If Value < 0 Or Value >= OFFSET_4 Then Return 0
+If Value <= MAXINT_4 Then
+    Return CLng(Value)
+Else
+    Return CLng(CLngLng(Value) - OFFSET_4)
+End If
+End Function
+Public Function CLngToULng(ByVal Value As Long) As LongLong
+Const OFFSET_4 As LongLong = 4294967296
+If Value < 0 Then
+    Return Value + OFFSET_4
+Else
+    Return Value
+End If
+End Function
 [Description("Performs an unsigned add on a LongPtr (Long or LongLong)")]
 Public Function PointerAdd(ByVal Start As LongPtr, ByVal Incr As LongPtr) As LongPtr
     #If Win64 Then
@@ -5480,7 +5729,7 @@ Public Function IoGetCurrentIrpStackLocation(ByRef pIrp As IRP) As LongPtr
 End Function
 
 Public Function IoGetNextIrpStackLocation(ByRef pIrp As IRP) As LongPtr
-    IoGetNextIrpStackLocation = pIrp.CurrentStackLocation - LenB(Of LongPtr)
+    IoGetNextIrpStackLocation = pIrp.CurrentStackLocation - LenB(Of IO_STACK_LOCATION)
 End Function
 
 Public Sub IoCopyCurrentIrpStackLocationToNext(pIrp As IRP)
@@ -5505,7 +5754,7 @@ End Sub
 
 Public Sub IoSkipCurrentIrpStackLocation(pIrp As IRP)
     pIrp.CurrentLocation += CByte(1)
-    pIrp.CurrentStackLocation += 1
+    pIrp.CurrentStackLocation += LenB(Of IO_STACK_LOCATION)
 End Sub
 
 [IgnoreWarnings(TB0018)]
@@ -5542,8 +5791,8 @@ Public Sub IoInitializeRemoveLock(RemoveLock As IO_REMOVE_LOCK, Tag As Long, Max
     Call IoInitializeRemoveLockEx(RemoveLock, Tag, Maxmin, HighWater, LenB(RemoveLock))
 End Sub
 
-Public Sub IoReleaseRemoveLockAndWait(RemoveLock As IO_REMOVE_LOCK, Tag As Long, RemlockSize As Long)
-    IoReleaseRemoveLockAndWaitEx RemoveLock, Tag, RemlockSize
+Public Sub IoReleaseRemoveLockAndWait(RemoveLock As IO_REMOVE_LOCK, ByVal Tag As LongPtr)
+    IoReleaseRemoveLockAndWaitEx RemoveLock, Tag, LenB(Of IO_REMOVE_LOCK)
 End Sub
 
 Public Function IoCallDriver(DeviceObject As DEVICE_OBJECT, pIrp As IRP) As Long
@@ -5562,28 +5811,39 @@ Public Function IsListEmpty(ListHead As LIST_ENTRY) As Byte
     End If
 End Function
 Public Sub InsertHeadList(ListHead As LIST_ENTRY, Entry As LIST_ENTRY)
-    Dim NextEntry As LIST_ENTRY
-    CopyMemory NextEntry, ByVal ListHead.Flink, LenB(Of LIST_ENTRY)
-    Entry.Flink = VarPtr(NextEntry)
+    Dim Flink As LongPtr
+    Flink = listhead.Flink
+    Entry.Flink = Flink
     Entry.Blink = VarPtr(ListHead)
-    NextEntry.Blink = VarPtr(Entry)
+    CType(Of LIST_ENTRY)(Flink).Blink = VarPtr(Entry)
     ListHead.Flink = VarPtr(Entry)
 End Sub
-Public Function RemoveListHead(ListHead As LIST_ENTRY) As LIST_ENTRY
-    Dim Entry As LIST_ENTRY
-    Dim NextEntry As LIST_ENTRY
-    CopyMemory Entry, ByVal ListHead.Flink, LenB(Of LIST_ENTRY)
-    CopyMemory NextEntry, ByVal Entry.Flink, LenB(Of LIST_ENTRY)
-    ListHead.Flink = VarPtr(NextEntry)
-    NextEntry.Blink = VarPtr(ListHead)
+Public Function RemoveHeadList(ListHead As LIST_ENTRY) As LongPtr
+    Dim Entry As LongPtr
+    Dim Flink As LongPtr
+    Entry = ListHead.Flink
+    Flink = CType(Of LIST_ENTRY)(Entry).Flink
+    ListHead.Flink = Flink
+    CType(of LIST_ENTRY)(Flink).Blink = VarPtr(ListHead)
     Return Entry
 End Function
+public sub FatalListEntryError(byval p1 as longptr, byval p2 as longptr, byval p3 as longptr)
+    UNREFERENCED_PARAMETER(p1)
+    UNREFERENCED_PARAMETER(p2)
+    UNREFERENCED_PARAMETER(p3)
+
+    RtlFailFast(FAST_FAIL_CORRUPT_LIST_ENTRY)
+End Sub
+public sub RtlFailFast cdecl naked(byval code as Long)
+    Emit(&HB9, &H07, &H00, &H00, &H00) 'mov ecx, 7    ;Load failure reason
+    Emit(&HCD, &H29)                   'int 29h       ;Trigger fast-fail)
+End Sub
 Public Sub InsertTailList(ListHead As LIST_ENTRY, Entry As LIST_ENTRY)
-    Dim PrevEntry As LIST_ENTRY
-    CopyMemory PrevEntry, ByVal ListHead.Blink, LenB(Of LIST_ENTRY)
+    Dim Blink As LongPtr
+    Blink = ListHead.Blink
     Entry.Flink = VarPtr(ListHead)
-    Entry.Blink = VarPtr(PrevEntry)
-    PrevEntry.Flink = VarPtr(Entry)
+    Entry.Blink = Blink
+    CType(Of LIST_ENTRY)(Blink).Flink = VarPtr(Entry)
     ListHead.Blink = VarPtr(Entry)
 End Sub
 
@@ -5601,6 +5861,7 @@ End Sub
 Public Sub ExInitializeFastMutex(ByRef FastMutex As FAST_MUTEX)
     FastMutex.Owner = 0
     FastMutex.Contention = 0
+    FastMutex.Count = FM_LOCK_BIT
     KeInitializeEvent FastMutex.Event, SynchronizationEvent, 0
 End Sub
 
@@ -5698,7 +5959,7 @@ End Function
 Public Sub InterlockedAdd64(Addend As LongLong, ByVal Value As LongLong)
     Dim pksl As LongPtr, irql As KIRQL
     KeInitializeSpinLock pksl
-    irql = KeAcquireSpinLock(pksl)
+    ' irql = KeAcquireSpinLock(pksl)
     ExInterlockedAddLargeInteger(Addend, Value, pksl)
     KeReleaseSpinLock pksl, irql
 End Sub
@@ -5709,14 +5970,14 @@ Private Type KmMsgBox
     pTitle As LongPtr
     nType As LongPtr
 End Type
-[Description("Yes, this is a MsgBox implementation for kernel mode." & vbCrLf & "IMPORTANT: This must originate from a user-mode process, e.g. in the DeviceIoControl handler.")]
+[Description("Must call as `tbKMode.MsgBox`. Yes, this is a MsgBox implementation for kernel mode." & vbCrLf & "IMPORTANT: This must originate from a user-mode process, e.g. in the DeviceIoControl handler.")]
 Public Function MsgBox(ByVal lpText As LongPtr, ByVal dwOptions As MessageBoxFlags, ByVal lpTitle As LongPtr) As HARDERROR_RESPONSE
     Dim pArgs As KmMsgBox
     Dim uText As UNICODE_STRING
     Dim uTitle As UNICODE_STRING
     
     RtlInitUnicodeString uText, lpText
-    RtlInitUnicodeString uText, lpTitle
+    RtlInitUnicodeString uTitle, lpTitle
     pArgs.pText = VarPtr(uText)
     pArgs.pTitle = VarPtr(uTitle)
     pArgs.nType = dwOptions
@@ -5727,23 +5988,27 @@ Public Function MsgBox(ByVal lpText As LongPtr, ByVal dwOptions As MessageBoxFla
     
     Return lRet
 End Function
+[Description("Must call as `tbKMode.LCase`")]
 Public Function LCase(ByVal sz As LongPtr) As LongPtr
     'Override 
     Return _wcslwr(sz)
 End Function
+[Description("Must call as `tbKMode.UCase`")]
 Public Function UCase(ByVal sz As LongPtr) As LongPtr
     'Override 
     Return _wcsupr(sz)
 End Function
+[Description("Must call as `tbKMode.StrRev`")]
 Public Function StrRev(ByVal sz As LongPtr) As LongPtr
     'Override
     Return _wcsrev(sz)
 End Function
+[Description("Must call as `tbKMode.InStr`")]
 Public Function InStr(ByVal szIn As LongPtr, ByVal szFind As LongPtr) As Long
     'Override
     Dim lpRet As LongPtr = wcsstr(szIn, szFind)
     If lpRet Then
-        Return CLng(szIn - lpRet)
+        Return CLng((lpRet - szIn) \ 2 + 1)
     Else
         Return 0
     End If

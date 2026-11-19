@@ -1,4 +1,12 @@
 'Update 01 June 2025;  .
+
+#If Win64 Then
+Public Alias IMAGE_LOAD_CONFIG_DIRECTORY As IMAGE_LOAD_CONFIG_DIRECTORY64
+#Else
+Public Alias IMAGE_LOAD_CONFIG_DIRECTORY As IMAGE_LOAD_CONFIG_DIRECTORY32
+#End If
+
+
 Module modImage
 
     Public Const IMAGE_DOS_SIGNATURE  = &H5A4D  ' MZ
@@ -122,9 +130,9 @@ Module modImage
     End Enum
 
     Public Const IMAGE_ARCHIVE_START_SIZE  = 8
-    Public Const IMAGE_ARCHIVE_START  = "!<arch>\n"
-    Public Const IMAGE_ARCHIVE_END  = "`\n"
-    Public Const IMAGE_ARCHIVE_PAD  = "\n"
+    Public Const IMAGE_ARCHIVE_START  = "!<arch>" & vbLf
+    Public Const IMAGE_ARCHIVE_END  = "`" & vbLf
+    Public Const IMAGE_ARCHIVE_PAD  = "" & vbLf
     Public Const IMAGE_ARCHIVE_LINKER_MEMBER  = "/               "
     Public Const IMAGE_ARCHIVE_LONGNAMES_MEMBER  = "//              "
     Public Const IMAGE_ARCHIVE_HYBRIDMAP_MEMBER  = "/<HYBRIDMAP>/   "
@@ -703,7 +711,7 @@ Module modImage
         IMAGE_SYM_DTYPE_ARRAY = 3  ' array.
     End Enum
     Public Enum IMAGE_STORAGE_CLASS
-        IMAGE_SYM_CLASS_END_OF_FUNCTION = -1
+        IMAGE_SYM_CLASS_END_OF_FUNCTION = &HFF
         IMAGE_SYM_CLASS_NULL = &H0000
         IMAGE_SYM_CLASS_AUTOMATIC = &H0001
         IMAGE_SYM_CLASS_EXTERNAL = &H0002
@@ -788,43 +796,84 @@ Module modImage
     End Type
 
     [PackingAlignment(2)]
-    Public Type IMAGE_AUX_SYMBOL
-        Sym_TagIndex As Long
-        Sym_Misc As Long
-        Sym_FcnAry(7) As Byte
-        Sym_TvIndex As Long
-        File_Name(0 To (IMAGE_SIZEOF_SYMBOL - 1)) As Byte
-        Section_Length As Long ' section length
-        Section_NumberOfRelocations As Integer ' number of relocation entries
-        Section_NumberOfLinenumbers As Integer ' number of line numbers
-        Section_CheckSum As Long ' checksum for communal
-        Section_Number As Integer ' section number to associate with
-        Section_Selection As Byte ' communal selection type
-        Section_bReserved As Byte
-        Section_HighNumber As Integer ' high bits of the section number
-        TokenDef As IMAGE_AUX_SYMBOL_TOKEN_DEF
-        CRC_crc As Long
-        CRC_rgbReserved(13) As Byte
+    Public Type IMAGE_AUX_SYMBOL 'UNION
+        ' struct {
+            ' DWORD    TagIndex;                      // struct, union, or enum tag index
+            ' union {
+                ' struct {
+                    ' WORD    Linenumber;             // declaration line number
+                    ' WORD    Size;                   // size of struct, union, or enum
+                ' } LnSz;
+            ' DWORD    TotalSize;
+            ' } Misc;
+            ' union {
+                ' struct {                            // if ISFCN, tag, or .bb
+                    ' DWORD    PointerToLinenumber;
+                    ' DWORD    PointerToNextFunction;
+                ' } Function;
+                ' struct {                            // if ISARY, up to 4 dimen.
+                    ' WORD     Dimension[4];
+                ' } Array;
+            ' } FcnAry;
+            ' WORD    TvIndex;                        // tv index
+        ' } Sym;
+        ' struct {
+            ' BYTE    Name[IMAGE_SIZEOF_SYMBOL];
+        ' } File;
+        ' struct {
+            ' DWORD   Length;                         // section length
+            ' WORD    NumberOfRelocations;            // number of relocation entries
+            ' WORD    NumberOfLinenumbers;            // number of line numbers
+            ' DWORD   CheckSum;                       // checksum for communal
+            ' SHORT   Number;                         // section number to associate with
+            ' BYTE    Selection;                      // communal selection type
+        ' BYTE    bReserved;
+        ' SHORT   HighNumber;                     // high bits of the section number
+        ' } Section;
+        ' IMAGE_AUX_SYMBOL_TOKEN_DEF TokenDef;
+        ' struct {
+            ' DWORD crc;
+            ' BYTE  rgbReserved[14];
+        ' } CRC;
+        ' Sym_TagIndex As Long
+        ' Sym_Misc As Long
+        ' Sym_FcnAry(7) As Byte
+        ' Sym_TvIndex As Integer
+        ' File_Name(0 To (IMAGE_SIZEOF_SYMBOL - 1)) As Byte
+        ' Section_Length As Long ' section length
+        ' Section_NumberOfRelocations As Integer ' number of relocation entries
+        ' Section_NumberOfLinenumbers As Integer ' number of line numbers
+        ' Section_CheckSum As Long ' checksum for communal
+        ' Section_Number As Integer ' section number to associate with
+        ' Section_Selection As Byte ' communal selection type
+        ' Section_bReserved As Byte
+        ' Section_HighNumber As Integer ' high bits of the section number
+        ' TokenDef As IMAGE_AUX_SYMBOL_TOKEN_DEF
+        ' CRC_crc As Long
+        ' CRC_rgbReserved(13) As Byte
+        u(17) As Byte
     End Type
     [PackingAlignment(2)]
-    Public Type IMAGE_AUX_SYMBOL_EX
-        Sym_WeakDefaultSymIndex As Long
-        Sym_WeakSearchType As Long
-        Sym_rgbReserved(11) As Byte
-        File_Name(0 To (IMAGE_SIZEOF_SYMBOL - 1)) As Byte
-        Section_Length As Long ' section length
-        Section_NumberOfRelocations As Integer ' number of relocation entries
-        Section_NumberOfLinenumbers As Integer ' number of line numbers
-        Section_CheckSum As Long ' checksum for communal
-        Section_Number As Integer ' section number to associate with
-        Section_Selection As Byte ' communal selection type
-        Section_rgbReserved(1) As Byte
-        Section_HighNumber As Integer ' high bits of the section number
-        TokenDef As IMAGE_AUX_SYMBOL_TOKEN_DEF
-        rgbReserved(1) As Byte
-        CRC_crc As Long
-        CRC_rgbReserved(15) As Byte
+    Public Type IMAGE_AUX_SYMBOL_EX 'UNION
+        ' Sym_WeakDefaultSymIndex As Long
+        ' Sym_WeakSearchType As Long
+        ' Sym_rgbReserved(11) As Byte
+        ' File_Name(0 To (IMAGE_SIZEOF_SYMBOL - 1)) As Byte
+        ' Section_Length As Long ' section length
+        ' Section_NumberOfRelocations As Integer ' number of relocation entries
+        ' Section_NumberOfLinenumbers As Integer ' number of line numbers
+        ' Section_CheckSum As Long ' checksum for communal
+        ' Section_Number As Integer ' section number to associate with
+        ' Section_Selection As Byte ' communal selection type
+        ' Section_rgbReserved(1) As Byte
+        ' Section_HighNumber As Integer ' high bits of the section number
+        ' TokenDef As IMAGE_AUX_SYMBOL_TOKEN_DEF
+        ' rgbReserved(1) As Byte
+        ' CRC_crc As Long
+        ' CRC_rgbReserved(15) As Byte
+        u(19) As Byte
     End Type
+    
 
     Public Enum IMAGE_AUX_SYMBOL_TYPE
         IMAGE_AUX_SYMBOL_TYPE_TOKEN_DEF = 1
@@ -1113,13 +1162,13 @@ Module modImage
         ImageBase As LongPtr
         FunctionEntry As LongPtr 'PRUNTIME_FUNCTION
     End Type
-
+ 
     Public Type IMAGE_DYNAMIC_RELOCATION_TABLE
         Version As Long
         Size As Long
         '  IMAGE_DYNAMIC_RELOCATION DynamicRelocations[0];
     End Type
-    Public Const UNWIND_HISTORY_TABLE_SIZE = 32
+    Public Const UNWIND_HISTORY_TABLE_SIZE = 12
     
     Public Type UNWIND_HISTORY_TABLE
         Count As Long
@@ -1314,6 +1363,7 @@ Module modImage
         GuardXFGTableDispatchFunctionPointer As LongLong ' VA
         CastGuardOsDeterminedFailureMode As LongLong ' VA
         GuardMemcpyFunctionPointer As LongLong ' VA
+        UmaFunctionPointers As LongLong
     End Type
     [Description("⚠️ **WARNING:** CHECK SIZE BEFORE COPYING: This UDT has members appended in most Windows versions. Only copy the available size.")]
     Public Type IMAGE_LOAD_CONFIG_DIRECTORY32
@@ -1329,8 +1379,8 @@ Module modImage
         LockPrefixTable As Long ' VA
         MaximumAllocationSize As Long
         VirtualMemoryThreshold As Long
-        ProcessAffinityMask As Long
         ProcessHeapFlags As Long
+        ProcessAffinityMask As Long
         CSDVersion As Integer
         DependentLoadFlags As Integer
         EditList As Long ' VA
@@ -1370,62 +1420,7 @@ Module modImage
         GuardXFGTableDispatchFunctionPointer As Long ' VA
         CastGuardOsDeterminedFailureMode As Long ' VA
         GuardMemcpyFunctionPointer As Long ' VA
-    End Type
-    [Description("⚠️ **WARNING:** CHECK SIZE BEFORE COPYING: This UDT has members appended in most Windows versions. Only copy the available size.")]
-    Public Type IMAGE_LOAD_CONFIG_DIRECTORY
-        Size As Long
-        TimeDateStamp As Long
-        MajorVersion As Integer
-        MinorVersion As Integer
-        GlobalFlagsClear As Long
-        GlobalFlagsSet As Long
-        CriticalSectionDefaultTimeout As Long
-        DeCommitFreeBlockThreshold As LongPtr
-        DeCommitTotalFreeThreshold As LongPtr
-        LockPrefixTable As LongPtr ' VA
-        MaximumAllocationSize As LongPtr
-        VirtualMemoryThreshold As LongPtr
-        ProcessAffinityMask As LongPtr
-        ProcessHeapFlags As Long
-        CSDVersion As Integer
-        DependentLoadFlags As Integer
-        EditList As LongPtr ' VA
-        SecurityCookie As LongPtr ' VA
-        SEHandlerTable As LongPtr ' VA
-        SEHandlerCount As LongPtr
-        'Fields available in v8.1+ of the Windows SDK.
-        GuardCFCheckFunctionPointer As LongPtr ' VA
-        GuardCFDispatchFunctionPointer As LongPtr ' VA
-        GuardCFFunctionTable As LongPtr ' VA
-        GuardCFFunctionCount As LongPtr
-        GuardFlags As ImageLoadConfigGuardFlags
-        'Fields available in v10.0.10586.0+ of the Windows SDK.
-        CodeIntegrity As IMAGE_LOAD_CONFIG_CODE_INTEGRITY
-        GuardAddressTakenIatEntryTable As LongPtr ' VA
-        GuardAddressTakenIatEntryCount As LongPtr
-        GuardLongJumpTargetTable As LongPtr ' VA
-        GuardLongJumpTargetCount As LongPtr
-        DynamicValueRelocTable As LongPtr ' VA
-        CHPEMetadataPointer As LongPtr ' VA
-        'Fields available in the v10.0.15063.468+ of the SDK.
-        GuardRFFailureRoutine As LongPtr ' VA
-        GuardRFFailureRoutineFunctionPointer As LongPtr ' VA
-        DynamicValueRelocTableOffset As Long
-        DynamicValueRelocTableSection As Integer
-        Reserved2 As Integer
-        'Windows 11
-        GuardRFVerifyStackPointerFunctionPointer As LongPtr ' VA
-        HotPatchTableOffset As Long
-        Reserved3 As Long
-        EnclaveConfigurationPointer As LongPtr ' VA
-        VolatileMetadataPointer As LongPtr ' VA
-        GuardEHContinuationTable As LongPtr ' VA
-        GuardEHContinuationCount As LongPtr
-        GuardXFGCheckFunctionPointer As LongPtr ' VA
-        GuardXFGDispatchFunctionPointer As LongPtr ' VA
-        GuardXFGTableDispatchFunctionPointer As LongPtr ' VA
-        CastGuardOsDeterminedFailureMode As LongPtr ' VA
-        GuardMemcpyFunctionPointer As LongPtr ' VA
+        UmaFunctionPointers As Long
     End Type
 
     Public Enum IMAGE_DEBUG_TYPE
