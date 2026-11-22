@@ -1,0 +1,42 @@
+{
+	"compiler.disableArrayBoundsChecks": true,
+	"compiler.disableFPUErrorChecks": true,
+	"compiler.disableOverflowChecks": true,
+	"configuration.inherits": "Defaults",
+	"project.appTitle": "tbKMode",
+	"project.buildPath": "${SourcePath}\\${ProjectName}.${FileExtension}",
+	"project.buildType": "Package TWINPACK",
+	"project.codeLensRunProcedure": false,
+	"project.description": "twinBASIC Kernel Mode Support Package, v0.3.7",
+	"project.dllRuntimeBinding": false,
+	"project.exportPathIsV2": true,
+	"project.id": "{B94B0CA7-4E84-44EA-BCF3-3F541FC64C0F}",
+	"project.isNativeSubsystem": true,
+	"project.licence": "MIT",
+	"project.name": "tbKMode",
+	"project.optionExplicit": true,
+	"project.packageVisibility": "PUBLIC",
+	"project.references": [],
+	"project.settingsVersion": 1,
+	"project.versionBuild": 7,
+	"project.versionCompanyName": "JAJ Productions",
+	"project.versionFileDescription": "TB Kernel Mode Support",
+	"project.versionMajor": 0,
+	"project.versionMinor": 3,
+	"project.versionProductName": "tbKMode",
+	"project.warnings": {
+		"errors": [
+			"TB0002",
+			"TB0016",
+			"TB0001",
+			"TB0003"
+		],
+		"hints": [],
+		"ignored": [
+			"TB0009"
+		],
+		"info": [],
+		"warnings": []
+	},
+	"runtime.useUnicodeStandardLibrary": true
+}
